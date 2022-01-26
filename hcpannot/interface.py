@@ -29,14 +29,40 @@ default_grid = ((None,        'polar_angle'),
 # The path that we load images from by default.
 default_load_path = '/data'
 default_osf_url = 'osf://tery8/'
+default_pseudo_path = ny.pseudo_path(default_osf_url, cache_path=default_load_path)
 
-def imgrid_to_xy(pts,
-                 grid=default_grid,
-                 imshape=default_imshape,
-                 xlim=default_xlim,
-                 ylim=default_ylim):
+# The HCP Retinotopy subjects:
+subject_ids = (100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
+               111514, 114823, 115017, 115825, 116726, 118225, 125525, 126426,
+               128935, 130114, 130518, 131217, 131722, 132118, 134627, 134829,
+               135124, 137128, 140117, 144226, 145834, 146129, 146432, 146735,
+               146937, 148133, 150423, 155938, 156334, 157336, 158035, 158136,
+               159239, 162935, 164131, 164636, 165436, 167036, 167440, 169040,
+               169343, 169444, 169747, 171633, 172130, 173334, 175237, 176542,
+               177140, 177645, 177746, 178142, 178243, 178647, 180533, 181232,
+               181636, 182436, 182739, 185442, 186949, 187345, 191033, 191336,
+               191841, 192439, 192641, 193845, 195041, 196144, 197348, 198653,
+               199655, 200210, 200311, 200614, 201515, 203418, 204521, 205220,
+               209228, 212419, 214019, 214524, 221319, 233326, 239136, 246133,
+               249947, 251833, 257845, 263436, 283543, 318637, 320826, 330324,
+               346137, 352738, 360030, 365343, 380036, 381038, 385046, 389357,
+               393247, 395756, 397760, 401422, 406836, 412528, 429040, 436845,
+               463040, 467351, 525541, 536647, 541943, 547046, 550439, 552241,
+               562345, 572045, 573249, 581450, 585256, 601127, 617748, 627549,
+               638049, 644246, 654552, 671855, 680957, 690152, 706040, 724446,
+               725751, 732243, 751550, 757764, 765864, 770352, 771354, 782561,
+               783462, 789373, 814649, 818859, 825048, 826353, 833249, 859671,
+               861456, 871762, 872764, 878776, 878877, 898176, 899885, 901139,
+               901442, 905147, 910241, 926862, 927359, 942658, 943862, 951457,
+               958976, 966975, 971160, 973770, 995174)
+
+def imgrid_to_flatmap(pts,
+                      grid=default_grid,
+                      imshape=default_imshape,
+                      xlim=default_xlim,
+                      ylim=default_ylim):
     '''
-    `imgrid_to_xy(pts)` yields a 2xN matrix the same size as the given
+    `imgrid_to_flatmap(pts)` yields a 2xN matrix the same size as the given
       (2xN) matrix `pts`, for which the points have been converted from
       coordinates in the given image grid (`grid` option).
     '''
@@ -65,13 +91,13 @@ def imgrid_to_xy(pts,
     x = xmu + (cs - cmu)*cpx2xu
     y = ymu + (rs - rmu)*rpx2yu
     return np.array([x,y])
-def xy_to_imgrid(pts,
-                 grid=default_grid,
-                 imshape=default_imshape,
-                 xlim=default_xlim,
-                 ylim=default_ylim):
+def flatmap_to_imgrid(pts,
+                      grid=default_grid,
+                      imshape=default_imshape,
+                      xlim=default_xlim,
+                      ylim=default_ylim):
     '''
-    `xy_to_imgrid(pts)` yields a 2xN matrix the same size as the given
+    `flatmap_to_imgrid(pts)` yields a 2xN matrix the same size as the given
       (2xN) matrix `pts`, for which the points have been converted from
       coordinates in the default flatmap representation to the given
       image grid (`grid` option).
@@ -100,7 +126,7 @@ def point_decorate_plot(ax, pts, *args, **kw):
     imshape = kw.pop('imshape', default_imshape)
     xlim = kw.pop('xlim', default_xlim)
     ylim = kw.pop('ylim', default_ylim)
-    rcs = xy_to_imgrid(pts, grid=grid, imshape=imshape, xlim=xlim, ylim=ylim)
+    rcs = flatmap_to_imgrid(pts, grid=grid, imshape=imshape, xlim=xlim, ylim=ylim)
     plots = [ax.plot(c, r, *args, **kw)
              for row in rcs
              for (r,c) in row]
@@ -112,7 +138,8 @@ def segs_decorate_plot(ax, segs, *args, **kw):
     xlim = kw.pop('xlim', default_xlim)
     ylim = kw.pop('ylim', default_ylim)
     pts_nx2 = np.reshape(segs, (-1, 2))
-    rcs = xy_to_imgrid(pts_nx2.T, grid=grid, imshape=imshape, xlim=xlim, ylim=ylim)
+    rcs = flatmap_to_imgrid(pts_nx2.T, grid=grid, imshape=imshape,
+                            xlim=xlim, ylim=ylim)
     plots = [lncol(segs, *args, **kw)
              for row in rcs
              for segs0 in row
@@ -154,6 +181,12 @@ def clicks_update_plot(ax, plots, pts, grid=default_grid, imshape=default_imshap
             dy = py[0] - y[0]
             plot.set_data(x+dx, y+dy)
     return plots
+
+
+# Functions for loading data.
+def load_sub_v123(sid):
+    path = default_pseudo_path.local_path('annot-v123', '%d.json.gz' % (sid,))
+    return ny.load(path)
 def load_subimage(sid, h, name,
                   load_path=default_load_path, osf_url=default_osf_url):
     from PIL import Image
@@ -176,6 +209,10 @@ def plot_imcat(ims, grid, k):
     grid = [[ims[k if g is None else g] for g in row]
             for row in grid]
     return imcat(grid)
+# We can (lazily) load the V1-V3 contours now (we could altrnately load them in
+# prep_subdata() function, but this prevents them from being loaded once for
+# each hemisphere).
+v123_contours = pimms.lmap({s: ny.util.curry(load_sub_v123, s) for s in sids})
 def prep_subdata(sid, h, load_path=default_load_path, osf_url=default_osf_url):
     dirname = os.path.join(load_path, str(sid))
     if not os.path.isfile(dirname):
@@ -189,79 +226,62 @@ def prep_subdata(sid, h, load_path=default_load_path, osf_url=default_osf_url):
            for imname in image_order}
     ims['wang'] = lambda:load_subwang(sid, h,
                                       load_path=load_path, osf_url=osf_url)
+    ims['v123'] = lambda:v123_contours[sid][h]
     return pimms.lmap(ims)
 def curry_prep_subdata(sid, h,
                        load_path=default_load_path, osf_url=default_osf_url):
     return lambda:prep_subdata(sid, h, load_path=load_path, osf_url=osf_url)
 
-subject_ids = (100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
-               111514, 114823, 115017, 115825, 116726, 118225, 125525, 126426,
-               128935, 130114, 130518, 131217, 131722, 132118, 134627, 134829,
-               135124, 137128, 140117, 144226, 145834, 146129, 146432, 146735,
-               146937, 148133, 150423, 155938, 156334, 157336, 158035, 158136,
-               159239, 162935, 164131, 164636, 165436, 167036, 167440, 169040,
-               169343, 169444, 169747, 171633, 172130, 173334, 175237, 176542,
-               177140, 177645, 177746, 178142, 178243, 178647, 180533, 181232,
-               181636, 182436, 182739, 185442, 186949, 187345, 191033, 191336,
-               191841, 192439, 192641, 193845, 195041, 196144, 197348, 198653,
-               199655, 200210, 200311, 200614, 201515, 203418, 204521, 205220,
-               209228, 212419, 214019, 214524, 221319, 233326, 239136, 246133,
-               249947, 251833, 257845, 263436, 283543, 318637, 320826, 330324,
-               346137, 352738, 360030, 365343, 380036, 381038, 385046, 389357,
-               393247, 395756, 397760, 401422, 406836, 412528, 429040, 436845,
-               463040, 467351, 525541, 536647, 541943, 547046, 550439, 552241,
-               562345, 572045, 573249, 581450, 585256, 601127, 617748, 627549,
-               638049, 644246, 654552, 671855, 680957, 690152, 706040, 724446,
-               725751, 732243, 751550, 757764, 765864, 770352, 771354, 782561,
-               783462, 789373, 814649, 818859, 825048, 826353, 833249, 859671,
-               861456, 871762, 872764, 878776, 878877, 898176, 899885, 901139,
-               901442, 905147, 910241, 926862, 927359, 942658, 943862, 951457,
-               958976, 966975, 971160, 973770, 995174)
-
 subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
                            for sid in subject_ids
                            for h in ['lh','rh']})
+subject_v123 = pimms.lmap({(sid,h): curry_prep_subv123(sid, h)
+                           for sid in subject_ids
+                           for h in ['lh','rh']})
 
-boundary_contours = {'V3/Outer ventral': 'isoang_vmu',
-                     'V2/V3 ventral': 'isoang_hmu',
-                     'V1/V2 ventral': 'isoang_vmu',
-                     'V1-middle': 'isoang_90',
-                     'V1/V2 dorsal': 'isoang_vml',
-                     'V2/V3 dorsal': 'isoang_hml',
-                     'V3/Outer dorsal': 'isoang_vml'}
+boundary_contours = {'hV4 Middle':  'isoang_90',
+                     'hV4/Outer Boundary': 'isoang_vml'}
 contour_names = tuple(list(boundary_contours.keys()) + 
-                      ['0.5° iso-eccen'] + 
-                      ['%d° iso-eccen' % k for k in [1,2,4,7]])
+                      ['Ventral 0° iso-eccen', 'Ventral 0.5° iso-eccen'] + 
+                      ['Vental %d° iso-eccen' % k for k in [1,2,4,7]] +
+                      ['Dorsal 0° iso-eccen',  'Dorsal 0.5° iso-eccen'] + 
+                      ['Dorsal %d° iso-eccen' % k for k in [1,2,4,7]])
 contour_key = dict(boundary_contours)
-contour_key['0.5° iso-eccen'] = 'isoecc_0.5'
-for k in [1,2,4,7]:
-    contour_key['%d° iso-eccen' % k] = 'isoecc_%d' % k
+contour_key['Ventral 0.5° iso-eccen'] = 'isoecc_0.5'
+contour_key['Dorsal 0.5° iso-eccen'] = 'isoecc_0.5'
+for k in [0,1,2,4,7]:
+    contour_key['Ventral %d° iso-eccen' % k] = 'isoecc_%d' % k
+    contour_key['Dorsal %d° iso-eccen' % k] = 'isoecc_%d' % k
 contour_key = pyr.pmap(contour_key)
 contour_save_key = pyr.pmap(
-    {'V1-middle': 'isoang_V1m',
-     'V1/V2 dorsal': 'isoang_V1d',
-     'V1/V2 ventral': 'isoang_V1v',
-     'V2/V3 dorsal': 'isoang_V2d',
-     'V2/V3 ventral': 'isoang_V2v',
-     'V3/Outer dorsal': 'isoang_V3d',
-     'V3/Outer ventral': 'isoang_V3v',
-     '0.5° iso-eccen': 'isoecc_0pt5',
-     '1° iso-eccen': 'isoecc_1',
-     '2° iso-eccen': 'isoecc_2',
-     '4° iso-eccen': 'isoecc_4',
-     '7° iso-eccen': 'isoecc_7'})
-legend_key = {'V3_ventral': 'V3/Outer ventral',
-              'V2_ventral': 'V2/V3 ventral',
-              'V1_ventral': 'V1/V2 ventral',
-              'V1_mid': 'V1-middle',
-              'V1_dorsal': 'V1/V2 dorsal',
-              'V2_dorsal': 'V2/V3 dorsal',
-              'V3_dorsal': 'V3/Outer dorsal',
-              '0.5': '0.5° iso-eccen',
-              '1': '1° iso-eccen',
-              '2': '2° iso-eccen',
-              '4': '4° iso-eccen',
-              '7': '7° iso-eccen'}
+    {'hV4 Middle': 'isoang_hV4m',
+     'hV4/Outer Boundary': 'isoang_hV4v',
+     'Ventral 0° iso-eccen': 'isoecc_0v',
+     'Ventral 0.5° iso-eccen': 'isoecc_0pt5v',
+     'Ventral 1° iso-eccen': 'isoecc_1v',
+     'Ventral 2° iso-eccen': 'isoecc_2v',
+     'Ventral 4° iso-eccen': 'isoecc_4v',
+     'Ventral 7° iso-eccen': 'isoecc_7v',
+     'Dorsal 0° iso-eccen': 'isoecc_0d',
+     'Dorsal 0.5° iso-eccen': 'isoecc_0pt5d',
+     'Dorsal 1° iso-eccen': 'isoecc_1d',
+     'Dorsal 2° iso-eccen': 'isoecc_2d',
+     'Dorsal 4° iso-eccen': 'isoecc_4d',
+     'Dorsal 7° iso-eccen': 'isoecc_7d'})
+legend_key = {'hV4_mid':     'hV4 Middle',
+              'hV4_ventral': 'hV4/Outer Boundary',
+              '0v':          'Ventral 0° iso-eccen',
+              '0.5v':        'Ventral 0.5° iso-eccen',
+              '1v':          'Ventral 1° iso-eccen',
+              '2v':          'Ventral 2° iso-eccen',
+              '4v':          'Ventral 4° iso-eccen',
+              '7v':          'Ventral 7° iso-eccen',
+              '0d':          'Dorsal 0° iso-eccen',
+              '0.5d':        'Dorsal 0.5° iso-eccen',
+              '1d':          'Dorsal 1° iso-eccen',
+              '2d':          'Dorsal 2° iso-eccen',
+              '4d':          'Dorsal 4° iso-eccen',
+              '7d':          'Dorsal 7° iso-eccen'}
 legend_rkey = {v:k for (k,v) in legend_key.items()}
 
 def load_legimage(load_path, h, imname):
@@ -279,7 +299,7 @@ def prep_legends(load_path=default_load_path, osf_url=default_osf_url):
     dirname = os.path.join(load_path, 'legends')
     if not os.path.isfile(dirname):
         pp = ny.util.pseudo_path(osf_url)
-        path = pp.local_path('annot-images', 'legends.tar.gz')
+        path = pp.local_path('annot-images', 'legends_hV4.tar.gz')
         import tarfile
         with tarfile.open(path) as fl:
             fl.extractall(load_path)

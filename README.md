@@ -1,6 +1,7 @@
-# Annotation of V1, V2, and V3 in the Human Connectome Project
+# Annotation of Visual Cortices of the Human Connectome Project
 
-This repository is a tool for annotating the iso-eccentricity and visual area boundary contours in V1, V2, and V3 that were initially annotated by [Benson **et al**. (2021)](https://doi.org/10.1101/2020.12.30.424856).
+This repository is a tool for annotating the iso-eccentricity and visual area boundary contours in the visual cortices of the subjects from the Human Connectome Project 7 Tesla Retinotopy Dataset ([Benson et al., 2018](https://doi.org/10.1167/18.13.23); see also:
+[Benson **et al**., 2021](https://doi.org/10.1101/2020.12.30.424856)).
 
 ## How to use this repository
 
@@ -20,7 +21,7 @@ Using this repository requires signing up for GitHub and downloading/running som
 2. In a BASH shell, clone your own version of this repository.
 
    ```bash
-   $ git clone https://github.com/<username>/hcp-annot-v123
+   $ git clone https://github.com/<username>/hcp-annot-vc
    ```
    
    (Be sure to replace the "`<username>`" in the previous command with your GitHub username.)
@@ -28,12 +29,12 @@ Using this repository requires signing up for GitHub and downloading/running som
    Then `cd` into the new directory.
    
    ```bash
-   $ cd hcp-annot-v123
+   $ cd hcp-annot-vc
    ```
 
 #### Running the Tool (follow these each time you work on the project)
 
-3. Update the repository with any new changes. To do this, start by going to **your** copy of the repository: `http://github.com/<username>/hcp-annot-v123` where `<username>` is your GitHub username. There should be a green button named "Code" in the upper-right section of this page. Just below this button, there will be a button labeled "Fetch Upstream" with a little arrow next to it. Click the arrow and select "Fetch and Merge" to update your repository. If you are asked to enter a merge message, you can safely leave this message unchanged. If you run this "Fetch and Merge" step, you then need to run the following in the command line:
+3. Update the repository with any new changes. To do this, start by going to **your** copy of the repository: `http://github.com/<username>/hcp-annot-vc` where `<username>` is your GitHub username. There should be a green button named "Code" in the upper-right section of this page. Just below this button, there will be a button labeled "Fetch Upstream" with a little arrow next to it. Click the arrow and select "Fetch and Merge" to update your repository. If you are asked to enter a merge message, you can safely leave this message unchanged. If you run this "Fetch and Merge" step, you then need to run the following in the command line:
    
    ```bash
    $ git pull
@@ -64,14 +65,15 @@ Using this repository requires signing up for GitHub and downloading/running som
 6. Click to open the file `open_me.ipynb`. This should open a new window containing a Jupyter notebook.
 6. Click on the last cell in the notebook (containing the text `ROITool(...)` at the end) and press Control+Enter. This should create an output cell below the original cell that contains the annotation tool. The use of this tool is described in the notebook itself. The tool automatically saves your progress whenever you change the subject, hemisphere, or contour, or whenever you press the Save button.
 7. Once you have finished annotating (you do not need to be completely finished---just finished for the time being), you can close the Jupyter browser tabs and press Control+C in the terminal window that is running the virtual machine (where you typed `docke compose up --build`) to shut it down.
-8. To commit your work to GitHub you will need to can use the following commands (from within the root of the `hcp-annot-v123` repository, where you also ran `docker compose up --build`):
+8. To commit your work to GitHub you will need to can use the following commands (from within the root of the `hcp-annot-vc` repository, where you also ran `docker compose up --build`):
 
    ```bash
    $ git add save/<username>/*/*
    $ git commit -a -m '<some message>'
+   $ git push
    ```
    
-   The `<username>` in the first command should be replaced with your GitHub username, and the `<some message>` can be any message you wish to attach to the batch of contours worked on since your last commit. It's fine for this project to commit an empty message (`''`)---comments on individual contours should go in the Notes section of the contour editor.
+   The `<username>` in the first command should be replaced with your GitHub username, and the `<some message>` can be any message you wish to attach to the batch of contours worked on since your last commit. It's fine for this project to commit an empty message (`''`)---comments on individual contours should go in the Notes section of the contour editor. The final command, `git push`, tells Git to sync your work up to your repository on [github.com](https://github.com/). 
    
-   **Important**: You should commit your work often, ideally after every time you finish working on a set of contours. Committing the work mostly just prevents work from being lost.
+   **Important**: You should commit and push your work often, ideally after every time you finish working on a set of contours. Pushing the work to GitHub prevents it from being lost.
 

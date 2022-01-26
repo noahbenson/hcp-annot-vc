@@ -10,7 +10,8 @@ noahbenson/hcp-annot-v123.
 from .core import (plot_angle, plot_eccen, plot_curv, plot_hmbound,
                    plot_vmbound, plot_as_image, op_flatmap, plot_isoang,
                    plot_isoecc, generate_images, label_to_segs)
-from .interface import (subject_ids, subject_data, ROITool)
+from .interface import (subject_ids, subject_data, ROITool,
+                        imgrid_to_flatmap, flatmap_to_imgrid)
 
 
 
