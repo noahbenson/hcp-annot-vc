@@ -29,7 +29,8 @@ default_grid = ((None,        'polar_angle'),
 # The path that we load images from by default.
 default_load_path = '/data'
 default_osf_url = 'osf://tery8/'
-default_pseudo_path = ny.pseudo_path(default_osf_url, cache_path=default_load_path)
+default_pseudo_path = ny.util.pseudo_path(default_osf_url,
+                                          cache_path=default_load_path)
 
 # The HCP Retinotopy subjects:
 subject_ids = (100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
@@ -212,7 +213,8 @@ def plot_imcat(ims, grid, k):
 # We can (lazily) load the V1-V3 contours now (we could altrnately load them in
 # prep_subdata() function, but this prevents them from being loaded once for
 # each hemisphere).
-v123_contours = pimms.lmap({s: ny.util.curry(load_sub_v123, s) for s in sids})
+v123_contours = pimms.lmap({s: ny.util.curry(load_sub_v123, s)
+                            for s in subject_ids})
 def prep_subdata(sid, h, load_path=default_load_path, osf_url=default_osf_url):
     dirname = os.path.join(load_path, str(sid))
     if not os.path.isfile(dirname):
@@ -233,9 +235,6 @@ def curry_prep_subdata(sid, h,
     return lambda:prep_subdata(sid, h, load_path=load_path, osf_url=osf_url)
 
 subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
-                           for sid in subject_ids
-                           for h in ['lh','rh']})
-subject_v123 = pimms.lmap({(sid,h): curry_prep_subv123(sid, h)
                            for sid in subject_ids
                            for h in ['lh','rh']})
 
@@ -299,7 +298,7 @@ def prep_legends(load_path=default_load_path, osf_url=default_osf_url):
     dirname = os.path.join(load_path, 'legends')
     if not os.path.isfile(dirname):
         pp = ny.util.pseudo_path(osf_url)
-        path = pp.local_path('annot-images', 'legends_hV4.tar.gz')
+        path = pp.local_path('annot-images', 'legends.tar.gz')
         import tarfile
         with tarfile.open(path) as fl:
             fl.extractall(load_path)
