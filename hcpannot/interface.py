@@ -237,27 +237,51 @@ def curry_prep_subdata(sid, h,
 subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
                            for sid in subject_ids
                            for h in ['lh','rh']})
-# Contour Information ##########################################################
-contour_data = [
-    dict(name='hV4 Middle',             image='isoang_90',  save='isoang_V4m',  legend='hV4_mid'),
-    dict(name='hV4/Outer Bondary',      image='isoang_vml', save='isoang_V4v',  legend='hV4_vnt'),
-    dict(name='Ventral 0° iso-eccen',   image='isoecc_0',   save='isoecc_0v',   legend='0v'),
-    dict(name='Ventral 0.5° iso-eccen', image='isoecc_0.5', save='isoecc_0.5v', legend='0.5v'),
-    dict(name='Ventral 1° iso-eccen',   image='isoecc_1',   save='isoecc_1v',   legend='1v'),
-    dict(name='Ventral 2° iso-eccen',   image='isoecc_2',   save='isoecc_2v',   legend='2v'),
-    dict(name='Ventral 4° iso-eccen',   image='isoecc_4',   save='isoecc_4v',   legend='4v'),
-    dict(name='Ventral 7° iso-eccen',   image='isoecc_7',   save='isoecc_7v',   legend='7v'),
-    dict(name='Dorsal 0° iso-eccen',    image='isoecc_0',   save='isoecc_0d',   legend='0d'),
-    dict(name='Dorsal 0.5° iso-eccen',  image='isoecc_0.5', save='isoecc_0.5d', legend='0.5d'),
-    dict(name='Dorsal 1° iso-eccen',    image='isoecc_1',   save='isoecc_1d',   legend='1d'),
-    dict(name='Dorsal 2° iso-eccen',    image='isoecc_2',   save='isoecc_2d',   legend='2d'),
-    dict(name='Dorsal 4° iso-eccen',    image='isoecc_4',   save='isoecc_4d',   legend='4d'),
-    dict(name='Dorsal 7° iso-eccen',    image='isoecc_7',   save='isoecc_7d',   legend='7d')]
-contours = {cdrow['name']:cdrow for cdrow in contour_data}
-contours_by_legend = {cdrow['legend']:cdrow for cdrow in contour_data}
-contour_names = tuple([_u['name'] for _u in contour_data])
-# The contour we start on:
-default_start_contour = next((cd['name'] for cd in contour_data), None)
+
+boundary_contours = {'hV4 Middle':  'isoang_90',
+                     'hV4/Outer Boundary': 'isoang_vml'}
+contour_names = tuple(list(boundary_contours.keys()) + 
+                      ['Ventral 0° iso-eccen', 'Ventral 0.5° iso-eccen'] + 
+                      ['Vental %d° iso-eccen' % k for k in [1,2,4,7]] +
+                      ['Dorsal 0° iso-eccen',  'Dorsal 0.5° iso-eccen'] + 
+                      ['Dorsal %d° iso-eccen' % k for k in [1,2,4,7]])
+contour_key = dict(boundary_contours)
+contour_key['Ventral 0.5° iso-eccen'] = 'isoecc_0.5'
+contour_key['Dorsal 0.5° iso-eccen'] = 'isoecc_0.5'
+for k in [0,1,2,4,7]:
+    contour_key['Ventral %d° iso-eccen' % k] = 'isoecc_%d' % k
+    contour_key['Dorsal %d° iso-eccen' % k] = 'isoecc_%d' % k
+contour_key = pyr.pmap(contour_key)
+contour_save_key = pyr.pmap(
+    {'hV4 Middle': 'isoang_hV4m',
+     'hV4/Outer Boundary': 'isoang_hV4v',
+     'Ventral 0° iso-eccen': 'isoecc_0v',
+     'Ventral 0.5° iso-eccen': 'isoecc_0pt5v',
+     'Ventral 1° iso-eccen': 'isoecc_1v',
+     'Ventral 2° iso-eccen': 'isoecc_2v',
+     'Ventral 4° iso-eccen': 'isoecc_4v',
+     'Ventral 7° iso-eccen': 'isoecc_7v',
+     'Dorsal 0° iso-eccen': 'isoecc_0d',
+     'Dorsal 0.5° iso-eccen': 'isoecc_0pt5d',
+     'Dorsal 1° iso-eccen': 'isoecc_1d',
+     'Dorsal 2° iso-eccen': 'isoecc_2d',
+     'Dorsal 4° iso-eccen': 'isoecc_4d',
+     'Dorsal 7° iso-eccen': 'isoecc_7d'})
+legend_key = {'hV4_mid':     'hV4 Middle',
+              'hV4_ventral': 'hV4/Outer Boundary',
+              '0v':          'Ventral 0° iso-eccen',
+              '0.5v':        'Ventral 0.5° iso-eccen',
+              '1v':          'Ventral 1° iso-eccen',
+              '2v':          'Ventral 2° iso-eccen',
+              '4v':          'Ventral 4° iso-eccen',
+              '7v':          'Ventral 7° iso-eccen',
+              '0d':          'Dorsal 0° iso-eccen',
+              '0.5d':        'Dorsal 0.5° iso-eccen',
+              '1d':          'Dorsal 1° iso-eccen',
+              '2d':          'Dorsal 2° iso-eccen',
+              '4d':          'Dorsal 4° iso-eccen',
+              '7d':          'Dorsal 7° iso-eccen'}
+legend_rkey = {v:k for (k,v) in legend_key.items()}
 
 def load_legimage(load_path, h, imname):
     from PIL import Image
