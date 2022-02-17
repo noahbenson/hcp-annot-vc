@@ -250,18 +250,18 @@ subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
 contour_data = [
     # hV4:
     dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
-         image='eccmax'),
+         image='eccpeak_6.25deg'),
     dict(name='hV4/VO1 Middle', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
          image='isoang_90', optional=True),
-    dict(name='hV4 Ventral Boundary', save='hV4', legend='hV4', image='hV4',
+    dict(name='hV4 Ventral Boundary', save='hV4', legend='hV4', image='isoang_vml',
          start=('end', 'V3_ventral')),
     # VO1 and VO2:
     #dict(name='V3v Extension', save='V3v_ext', legend='V3v_ext', image='isoang_vml',
     #     start=('end', 'V3_ventral'), optional=True),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
-         image='VO_outer', start=('start', 'V3_ventral')),
+         image='isoang_vml', start=('start', 'V3_ventral')),
     dict(name='VO1/2 Interior Boundary', save='VO_inner', legend='VO_inner',
-         image='VO_inner'),
+         image='isoang_vmu'),
     # V3A/B
     #dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
     #     image='V3ab_outer'),
@@ -333,7 +333,18 @@ class ROITool(object):
         start_cd = contours[start_contour]
         (grid_rs, grid_cs) = (len(grid), len(grid[0]))
         figh = figsize * grid_rs / grid_cs
-        disp_layout = {'width': "85%"}
+        disp_layout = {'width': "90%",
+                       'display': 'flex',
+                       'flex-direction': 'row',
+                       'justify_content': 'flex-start'}
+        dispbox_layout = {'width': "90%",
+                          'display': 'flex',
+                          'flex-direction': 'row',
+                          'justify_content': 'flex-start'}
+        dispinn_layout = {'width': "100%",
+                          'display': 'flex',
+                          'flex-direction': 'row',
+                          'align_items': 'flex-end'}
         # Go ahead and setup all the Widgets.
         # Subject (SID) selection:
         self.sid_select = widgets.Dropdown(
@@ -355,43 +366,66 @@ class ROITool(object):
             layout={'width': dropdown_width})
         # Whether to show the Wang lines:
         self.wang_shown = widgets.Checkbox(
-            description='Wang et al. (2015) Contours',
+            description='Show Contours?',
             value=False,
+            indent=False,
             layout=disp_layout)
         # What color to use for the Wang lines:
         self.wang_color = widgets.ColorPicker(
-            description='Wang Color:',
+            #description='Wang Color:',
             concise=False,
             value='yellow',
             layout=disp_layout)
+        self.wang_disp_box = widgets.VBox(
+            (widgets.Label("Wang Atlas:"),
+             widgets.VBox((self.wang_shown, self.wang_color),
+                          layout=dispinn_layout)),
+            layout=dispbox_layout)
         # Whether to show the V1-V3 lines:
         self.v123_shown = widgets.Checkbox(
-            description='Expert V1-V3 Contours',
+            description='Show Contours?',
             value=True,
+            indent=False,
             layout=disp_layout)
         # What color to use for the Wang lines:
         self.v123_color = widgets.ColorPicker(
-            description='Expert V1-V3 Color:',
+            #description='Expert V1-V3 Color:',
             concise=False,
             value='white',
             layout=disp_layout)
+        self.v123_disp_box = widgets.VBox(
+            (widgets.Label("Expert V1-V3 Color:"),
+             widgets.VBox((self.v123_shown, self.v123_color),
+                          layout=dispinn_layout)),
+            layout=dispbox_layout)
         # Whether to show the already-drawn contours?
         self.work_shown = widgets.Checkbox(
-            description='Drawn Contour',
+            description='Show Contours?',
             value=True,
+            indent=False,
             layout=disp_layout)
         # What color to show the already-drawn contours?
         self.work_color = widgets.ColorPicker(
-            description='Contours Color:',
+            #description='Contours Color:',
             concise=False,
             value='#01A9DB',
             layout=disp_layout)
+        self.work_disp_box = widgets.VBox(
+            (widgets.Label("Drawn Contours Color:"),
+             widgets.VBox((self.work_shown, self.work_color),
+                          layout=dispinn_layout)),
+            layout=dispbox_layout)
         # What color to show the already-drawn contours?
         self.draw_color = widgets.ColorPicker(
-            description='Draw Color:',
+            #description='Draw Color:',
             concise=False,
             value='cyan',
             layout=disp_layout)
+        self.draw_disp_box = widgets.VBox(
+            (widgets.Label("Current Contour Color:"),
+             widgets.VBox((self.draw_color,),
+                          layout=dispinn_layout)),
+            layout=dispbox_layout)
         # The notes section.
         self.notes_area = widgets.Textarea(
             value='', 
@@ -412,27 +446,26 @@ class ROITool(object):
         self.controls_select = (self.sid_select,
                                 self.hemi_select,
                                 self.contour_select,
-                                #self.work_color,
-                                #self.draw_color,
                                 self.notes_panel,
                                 self.save_button,
                                 self.reset_button)
-        self.controls_display = (self.draw_color,
-                                 self.work_shown,
-                                 self.work_color,
-                                 self.v123_shown,
-                                 self.v123_color,
-                                 self.wang_shown,
-                                 self.wang_color)
+        self.controls_display = (self.draw_disp_box,
+                                 self.work_disp_box,
+                                 self.v123_disp_box,
+                                 self.wang_disp_box)
         self.controls = self.controls_select + self.controls_display
         # Go ahead and make the control panel for both the selection and the
         # display tabs.
-        control_layout = dict(height=f"{figh*dpi*0.8}px",
-                              width=sidepanel_width,
-                              align_items='center')
-        self.select_panel = widgets.VBox(self.controls_select,
+        control_layout = {'height': f"{figh*dpi*0.65}px",
+                          'width': sidepanel_width,
+                          'display': 'flex',
+                          'flex_flow': 'column',
+                          'flex_wrap': 'nowrap',
+                          'align_items': 'center',
+                          'justify_content': 'flex-start'}
+        self.select_panel = widgets.Box(self.controls_select,
                                          layout=control_layout)
-        self.display_panel = widgets.VBox(self.controls_display,
+        self.display_panel = widgets.Box(self.controls_display,
                                          layout=control_layout)
         self.control_panel = widgets.Tab(children=[self.select_panel, self.display_panel])
         self.control_panel.set_title(0, 'Selection')
