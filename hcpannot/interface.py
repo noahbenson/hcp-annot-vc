@@ -29,8 +29,6 @@ default_grid = ((None,        'polar_angle'),
 # The path that we load images from by default.
 default_load_path = '/data'
 default_osf_url = 'osf://tery8/'
-default_pseudo_path = ny.util.pseudo_path(default_osf_url,
-                                          cache_path=default_load_path)
 
 # The HCP Retinotopy subjects:
 subject_ids = (100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
@@ -190,7 +188,9 @@ def clicks_update_plot(ax, plots, pts, grid=default_grid, imshape=default_imshap
 
 # Functions for loading data.
 def load_sub_v123(sid):
-    path = default_pseudo_path.local_path('annot-v123', '%d.json.gz' % (sid,))
+    path = ny.util.pseudo_path(default_osf_url,
+                               cache_path=default_load_path)
+    path = path.local_path('annot-v123', '%d.json.gz' % (sid,))
     return ny.load(path)
 def load_subimage(sid, h, name,
                   load_path=default_load_path, osf_url=default_osf_url):
@@ -222,7 +222,9 @@ def plot_imcat(ims, grid, k):
 # each hemisphere).
 v123_contours = pimms.lmap({s: ny.util.curry(load_sub_v123, s)
                             for s in subject_ids})
-def prep_subdata(sid, h, load_path=default_load_path, osf_url=default_osf_url):
+def prep_subdata(sid, h, load_path=None, osf_url=default_osf_url):
+    if load_path is None: load_path = default_load_path
+    if osf_url is None: osf_url = default_osf_url
     dirname = os.path.join(load_path, str(sid))
     if not os.path.isfile(dirname):
         pp = ny.util.pseudo_path(osf_url)
@@ -257,7 +259,7 @@ contour_data = [
     #dict(name='V3v Extension', save='V3v_ext', legend='V3v_ext', image='isoang_vml',
     #     start=('end', 'V3_ventral'), optional=True),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
-         image='VO_outer', end=('start', 'V3_ventral')),
+         image='VO_outer', start=('start', 'V3_ventral')),
     dict(name='VO1/2 Interior Boundary', save='VO_inner', legend='VO_inner',
          image='VO_inner'),
     # V3A/B
@@ -359,7 +361,7 @@ class ROITool(object):
         # What color to use for the Wang lines:
         self.wang_color = widgets.ColorPicker(
             description='Wang Color:',
-            concise=True,
+            concise=False,
             value='yellow',
             layout=disp_layout)
         # Whether to show the V1-V3 lines:
@@ -370,7 +372,7 @@ class ROITool(object):
         # What color to use for the Wang lines:
         self.v123_color = widgets.ColorPicker(
             description='Expert V1-V3 Color:',
-            concise=True,
+            concise=False,
             value='white',
             layout=disp_layout)
         # Whether to show the already-drawn contours?
@@ -381,13 +383,13 @@ class ROITool(object):
         # What color to show the already-drawn contours?
         self.work_color = widgets.ColorPicker(
             description='Contours Color:',
-            concise=True,
+            concise=False,
             value='#01A9DB',
             layout=disp_layout)
         # What color to show the already-drawn contours?
         self.draw_color = widgets.ColorPicker(
             description='Draw Color:',
-            concise=True,
+            concise=False,
             value='cyan',
             layout=disp_layout)
         # The notes section.
