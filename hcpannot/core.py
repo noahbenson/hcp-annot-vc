@@ -105,7 +105,7 @@ def plot_eccpeak(fmap, ecc0, cmap='highpeak', axes=None, cod_threshold=None):
     elif cmap == 'highpeak': cmap = highpeak_cmap
     mask=(None if cod_threshold is None else
           ('prf_variance_explained', cod_threshold, np.inf))
-    return ny.cortex_plot(fmap, axes=axes, color=q, mask=mask,
+    return ny.cortex_plot(fmap, axes=axes, color=ecc, mask=mask,
                           vmin=0, vmax=1, cmap=cmap)
 def plot_vmbound(fmap, vd, axes=None, cmap='highpeak', cod_threshold=None):
     ang = np.array(fmap.prop('prf_polar_angle'))
