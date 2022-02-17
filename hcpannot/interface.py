@@ -138,8 +138,13 @@ def segs_decorate_plot(ax, segs, *args, **kw):
     imshape = kw.pop('imshape', default_imshape)
     xlim = kw.pop('xlim', default_xlim)
     ylim = kw.pop('ylim', default_ylim)
-    pts_nx2 = np.reshape(segs, (-1, 2))
-    rcs = flatmap_to_imgrid(pts_nx2.T, grid=grid, imshape=imshape,
+    if isinstance(segs, dict):
+        tmp = [np.asarray(u) for u in segs.values()]
+        tmp = [np.reshape(np.transpose([u[:,:-1], u[:,1:]], (2,0,1)), (-1,2)) for u in tmp]
+        pts_nx2 = np.vstack(tmp)
+    else:
+        pts_nx2 = np.reshape(segs, (-1, 2)).T
+    rcs = flatmap_to_imgrid(pts_nx2, grid=grid, imshape=imshape,
                             xlim=xlim, ylim=ylim)
     plots = [lncol(segs, *args, **kw)
              for row in rcs
@@ -207,7 +212,10 @@ def imcat(grid):
     col = [np.concatenate(row, axis=1) for row in grid]
     return np.concatenate(col, axis=0)
 def plot_imcat(ims, grid, k):
-    grid = [[ims[k if g is None else g] for g in row]
+    grid = [[ims.get(k if g is None else g) for g in row]
+            for row in grid]
+    dflt = (default_imshape[0]//2, default_imshape[1]//2, 3)
+    grid = [[(np.ones(dflt, dtype='int')*255 if g is None else g) for g in row]
             for row in grid]
     return imcat(grid)
 # We can (lazily) load the V1-V3 contours now (we could altrnately load them in
@@ -238,56 +246,29 @@ subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
                            for sid in subject_ids
                            for h in ['lh','rh']})
 
-boundary_contours = {'hV4 Middle':  'isoang_90',
-                     'hV4/Outer Boundary': 'isoang_vml'}
-contour_names = tuple(list(boundary_contours.keys()) + 
-                      ['Ventral 0° iso-eccen', 'Ventral 0.5° iso-eccen'] + 
-                      ['Vental %d° iso-eccen' % k for k in [1,2,4,7]] +
-                      ['Dorsal 0° iso-eccen',  'Dorsal 0.5° iso-eccen'] + 
-                      ['Dorsal %d° iso-eccen' % k for k in [1,2,4,7]])
-contour_key = dict(boundary_contours)
-contour_key['Ventral 0.5° iso-eccen'] = 'isoecc_0.5'
-contour_key['Dorsal 0.5° iso-eccen'] = 'isoecc_0.5'
-for k in [0,1,2,4,7]:
-    contour_key['Ventral %d° iso-eccen' % k] = 'isoecc_%d' % k
-    contour_key['Dorsal %d° iso-eccen' % k] = 'isoecc_%d' % k
-contour_key = pyr.pmap(contour_key)
-contour_save_key = pyr.pmap(
-    {'hV4 Middle': 'isoang_hV4m',
-     'hV4/Outer Boundary': 'isoang_hV4v',
-     'Ventral 0° iso-eccen': 'isoecc_0v',
-     'Ventral 0.5° iso-eccen': 'isoecc_0pt5v',
-     'Ventral 1° iso-eccen': 'isoecc_1v',
-     'Ventral 2° iso-eccen': 'isoecc_2v',
-     'Ventral 4° iso-eccen': 'isoecc_4v',
-     'Ventral 7° iso-eccen': 'isoecc_7v',
-     'Dorsal 0° iso-eccen': 'isoecc_0d',
-     'Dorsal 0.5° iso-eccen': 'isoecc_0pt5d',
-     'Dorsal 1° iso-eccen': 'isoecc_1d',
-     'Dorsal 2° iso-eccen': 'isoecc_2d',
-     'Dorsal 4° iso-eccen': 'isoecc_4d',
-     'Dorsal 7° iso-eccen': 'isoecc_7d'})
-legend_key = {'hV4_mid':     'hV4 Middle',
-              'hV4_ventral': 'hV4/Outer Boundary',
-              '0v':          'Ventral 0° iso-eccen',
-              '0.5v':        'Ventral 0.5° iso-eccen',
-              '1v':          'Ventral 1° iso-eccen',
-              '2v':          'Ventral 2° iso-eccen',
-              '4v':          'Ventral 4° iso-eccen',
-              '7v':          'Ventral 7° iso-eccen',
-              '0d':          'Dorsal 0° iso-eccen',
-              '0.5d':        'Dorsal 0.5° iso-eccen',
-              '1d':          'Dorsal 1° iso-eccen',
-              '2d':          'Dorsal 2° iso-eccen',
-              '4d':          'Dorsal 4° iso-eccen',
-              '7d':          'Dorsal 7° iso-eccen'}
-legend_rkey = {v:k for (k,v) in legend_key.items()}
+contour_data = [
+    # hV4:
+    dict(name='hV4/VO1 Midline', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid', image='isoang_90'),
+    dict(name='hV4/VO1 Eccen. Reversal', save='hV4_VO1_eccrev', legend='hV4_VO1_eccrev', image='eccrev'),
+    dict(name='hV4 Outer Boundary', save='hV4', legend='hV4', image='hV4',
+         start=('start', 'V3_ventral')),
+    # VO1 and VO2:
+    dict(name='V3v Extension', save='V3v_ext', legend='V3v_ext', image='isoang_vml',
+         start=('end', 'V3_ventral')),
+    dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer', image='VO_outer'),
+    dict(name='VO1/2 Interior Boundary', save='VO_inner', legend='VO_inner', image='VO_inner'),
+    # V3A/B
+    dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer', image='V3ab_outer'),
+    dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner', image='V3ab_inner'),
+]
+contours = {cd['name']: cd for cd in contour_data}
+default_start_contour = contour_data[0]['name']
 
 def load_legimage(load_path, h, imname):
     from PIL import Image
-    flname = legend_rkey[imname]
-    flnm = os.path.join(load_path, 'legends', f'{h}_{flname}.png')
-    with Image.open(flnm) as im:
+    flname = os.path.join(load_path, 'legends', f'{h}_{imname}.png')
+    if not os.path.isfile(flname): return None
+    with Image.open(flname) as im:
         arr = np.array(im)
         ii = arr == 255
         arr[np.all(ii, axis=-1), :] = 0
@@ -305,7 +286,8 @@ def prep_legends(load_path=default_load_path, osf_url=default_osf_url):
     ims = {
         h: pimms.lmap(
             {cd['name']: curry_load_legimage(load_path, h, cd['legend'])
-             for cd in contours.values()})
+             for cd in contours.values()
+             if 'legend' in cd})
         for h in ['lh','rh']}
     return pyr.pmap(ims)
 legend_data = prep_legends()
@@ -359,7 +341,7 @@ class ROITool(object):
             layout={'width': dropdown_width})
         # Contour selection:
         self.contour_select = widgets.Dropdown(
-            options=contour_names,
+            options=list(contours.keys()),
             value=self.start_contour,
             description='Contour:',
             layout={'width': dropdown_width})
@@ -434,16 +416,16 @@ class ROITool(object):
         self.controls = self.controls_select + self.controls_display
         # Go ahead and make the control panel for both the selection and the
         # display tabs.
-        control_layout = dict(height='100%',
+        control_layout = dict(height=f"{figh*dpi*0.8}px",
                               width=sidepanel_width,
                               align_items='center')
         self.select_panel = widgets.VBox(self.controls_select,
                                          layout=control_layout)
-        self.display_panel = widgets.VBox(self.controls_select,
+        self.display_panel = widgets.VBox(self.controls_display,
                                          layout=control_layout)
-        self.control_panel = widgets.Tab()
-        self.control_panel.children = [self.select_panel, self.display_panel]
-        self.control_panel.titles = ['Selection', 'Display']
+        self.control_panel = widgets.Tab(children=[self.select_panel, self.display_panel])
+        self.control_panel.set_title(0, 'Selection')
+        self.control_panel.set_title(1, 'Display')
         # Copy over the start/default values.
         sid = self.sid_select.value
         hemi = self.hemi_select.value.lower()
@@ -472,13 +454,22 @@ class ROITool(object):
         #ax.format_coord = lambda x,y: ''
         # Make the legend axes
         self.legend_axes = fig.add_axes([0.35,0.35,0.3,0.3])
-        legim = legend_data[hemi][self.start_contour]
+        legim = legend_data[hemi].get(self.start_contour, None)
+        if legim is None:
+            legim = np.zeros((10,10,4))
         self.legend_implot = self.legend_axes.imshow(legim)
         self.legend_axes.axis('equal')
         self.legend_axes.axis('off')
         # Draw wang and set it's initial visibility.
         self.wang_plot = segs_decorate_plot(
             ax, segs, color=self.wang_color.value, lw=0.3, zorder=10,
+            grid=grid, imshape=imshape)
+        for ln in self.wang_plot:
+            ln.set_visible(self.wang_shown.value)
+        # Draw V123 and set their initial visibility.
+        segs = subdata['v123']
+        self.v123_plot = segs_decorate_plot(
+            ax, segs, color=self.v123_color.value, lw=0.3, zorder=9,
             grid=grid, imshape=imshape)
         for ln in self.wang_plot:
             ln.set_visible(self.wang_shown.value)
@@ -608,7 +599,7 @@ class ROITool(object):
         if save:
             self.save()
         # What's the new control selection:
-        subdata = subject_data[(sid, h)]
+        subdata = subject_data[(sid, hemi)]
         # Update the decor, the work, and the current drawings.
         if redraw_wang: self.update_wang()
         self.update_image()
@@ -632,12 +623,18 @@ class ROITool(object):
         elif var == 'contour':
             contour = change.new
             self.update_selection(contour=contour)
+        elif var == 'v123':
+            wang = change.new
+            for ln in self.v123_plot: ln.set_visible(wang)
         elif var == 'wang':
             wang = change.new
             for ln in self.wang_plot: ln.set_visible(wang)
         elif var == 'work':
             c = change.new
             for ln in self.work_plot: ln.set_visible(c)
+        elif var == 'v123_color':
+            c = change.new
+            for ln in self.v123_plot: ln.set_color(c)
         elif var == 'wang_color':
             c = change.new
             for ln in self.wang_plot: ln.set_color(c)
@@ -655,7 +652,7 @@ class ROITool(object):
             # no need to redraw
             return None
         else: return None
-        fig.canvas.draw_idle()
+        self.figure.canvas.draw_idle()
         return None
     
     # Setup the figure clicks!
@@ -667,7 +664,6 @@ class ROITool(object):
             sid = self.curr_sid()
             h = self.curr_hemi()
             contour = self.curr_contour()
-            cdat = contours[contour]
             cplot = self.draw_plot
             # if shift is down, we delete the last point
             ctrlkeys = ['control', 'ctrl']
@@ -693,10 +689,9 @@ class ROITool(object):
         contour = self.curr_contour()
         color = self.curr_work_color()
         vis = self.curr_work_shown()
-        cdat = contours[contour]
         ax = self.axes
         plots = []
-        for c in contour_names:
+        for c in contours.keys():
             if c == contour: continue
             pts = self.clicks[sid][h][contour]
             plots += clicks_decorate_plot(
@@ -725,7 +720,7 @@ class ROITool(object):
             r = {}
             for h in ['lh','rh']:
                 rr = {}
-                for contour in contour_names:
+                for contour in contours.keys():
                     c = contours[contour]['save']
                     rr[contour] = ny.util.curry(load_click_file,
                                                 sid, h, c, subdir)
@@ -848,7 +843,7 @@ class ROITool(object):
             r = {}
             for h in ['lh','rh']:
                 rr = {}
-                for contour in contour_names:
+                for contour in contours.keys():
                     c = contours[contour]['save']
                     rr[contour] = ny.util.curry(load_notes_file,
                                                 sid, h, c, subdir)
@@ -890,11 +885,10 @@ class ROITool(object):
     def redraw_legend(self):
         hemi = self.curr_hemi()
         contour = self.curr_contour()
-        try:
-            legim = legend_data[hemi][contour]
-            self.legend_implot.set_data(legim)
-        except Exception:
-            pass
+        legim = legend_data[hemi].get(contour, None)
+        if legim is None:
+            legim = np.zeros((10,10,4))
+        self.legend_implot.set_data(legim)
 
         
         
