@@ -188,7 +188,6 @@ def clicks_update_plot(ax, plots, pts, grid=default_grid, imshape=default_imshap
             plot.set_data(x+dx, y+dy)
     return plots
 
-
 # Functions for loading data.
 def load_sub_v123(sid):
     path = default_pseudo_path.local_path('annot-v123', '%d.json.gz' % (sid,))
@@ -248,9 +247,11 @@ subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
 
 contour_data = [
     # hV4:
-    dict(name='hV4/VO1 Midline', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid', image='isoang_90'),
-    dict(name='hV4/VO1 Eccen. Reversal', save='hV4_VO1_eccrev', legend='hV4_VO1_eccrev', image='eccrev'),
-    dict(name='hV4 Outer Boundary', save='hV4', legend='hV4', image='hV4',
+    dict(name='hV4/VO1 Middle', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
+         image='isoang_90', optional=True),
+    dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
+         image='eccrev'),
+    dict(name='hV4 Ventral Boundary', save='hV4', legend='hV4', image='hV4',
          start=('start', 'V3_ventral')),
     # VO1 and VO2:
     dict(name='V3v Extension', save='V3v_ext', legend='V3v_ext', image='isoang_vml',
@@ -326,6 +327,7 @@ class ROITool(object):
         start_cd = contours[start_contour]
         (grid_rs, grid_cs) = (len(grid), len(grid[0]))
         figh = figsize * grid_rs / grid_cs
+        disp_layout = {'width': "85%"}
         # Go ahead and setup all the Widgets.
         # Subject (SID) selection:
         self.sid_select = widgets.Dropdown(
@@ -348,39 +350,42 @@ class ROITool(object):
         # Whether to show the Wang lines:
         self.wang_shown = widgets.Checkbox(
             description='Wang et al. (2015) Contours',
-            value=False)
+            value=False,
+            layout=disp_layout)
         # What color to use for the Wang lines:
         self.wang_color = widgets.ColorPicker(
             description='Wang Color:',
             concise=True,
             value='yellow',
-            layout={'width':'50%'})
+            layout=disp_layout)
         # Whether to show the V1-V3 lines:
         self.v123_shown = widgets.Checkbox(
             description='Expert V1-V3 Contours',
-            value=True)
+            value=True,
+            layout=disp_layout)
         # What color to use for the Wang lines:
         self.v123_color = widgets.ColorPicker(
             description='Expert V1-V3 Color:',
             concise=True,
             value='white',
-            layout={'width':'50%'})
+            layout=disp_layout)
         # Whether to show the already-drawn contours?
         self.work_shown = widgets.Checkbox(
             description='Drawn Contour',
-            value=True)
+            value=True,
+            layout=disp_layout)
         # What color to show the already-drawn contours?
         self.work_color = widgets.ColorPicker(
             description='Contours Color:',
             concise=True,
             value='#01A9DB',
-            layout={'width':'50%'})
+            layout=disp_layout)
         # What color to show the already-drawn contours?
         self.draw_color = widgets.ColorPicker(
             description='Draw Color:',
             concise=True,
             value='cyan',
-            layout={'width':'50%'})
+            layout=disp_layout)
         # The notes section.
         self.notes_area = widgets.Textarea(
             value='', 
@@ -609,7 +614,7 @@ class ROITool(object):
         # Redraw the legend.
         self.redraw_legend()
         # Update the notes
-        self.notes_area.value = self.notes[sid][h][contour][0]
+        self.notes_area.value = self.notes[sid][hemi][contour][0]
     def update(self, var, change):
         # What updated?
         if var == 'sid':
@@ -693,12 +698,12 @@ class ROITool(object):
         plots = []
         for c in contours.keys():
             if c == contour: continue
-            pts = self.clicks[sid][h][contour]
+            pts = self.clicks[sid][h][c]
             plots += clicks_decorate_plot(
-                ax, pts, '.:',
+                ax, pts, '.--',
                 grid=self.grid, imshape=self.imshape,
                 color=color,
-                lw=self.contour_lw/2, ms=self.contour_ms/4)
+                lw=self.contour_lw*0.75, ms=self.contour_ms/4)
         for p in plots:
             p.set_visible(vis)
         self.work_plot = plots
