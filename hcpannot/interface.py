@@ -251,16 +251,13 @@ contour_data = [
     # hV4:
     dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
          image='eccpeak_6.25deg'),
-    dict(name='hV4/VO1 Middle', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
+    dict(name='hV4/VO1 Middle (*)', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
          image='isoang_90', optional=True),
-    dict(name='hV4 Ventral Boundary', save='hV4', legend='hV4', image='isoang_vml',
-         start=('end', 'V3_ventral')),
-    # VO1 and VO2:
-    #dict(name='V3v Extension', save='V3v_ext', legend='V3v_ext', image='isoang_vml',
-    #     start=('end', 'V3_ventral'), optional=True),
+    dict(name='hV4 Ventral Boundary', save='hV4', legend='hV4_ventral',
+         image='isoang_vml', start=('end', 'V3_ventral')),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
          image='isoang_vml', start=('start', 'V3_ventral')),
-    dict(name='VO1/2 Interior Boundary', save='VO_inner', legend='VO_inner',
+    dict(name='VO1/VO2 Interior Boundary', save='VO1_VO2', legend='VO1_VO2',
          image='isoang_vmu'),
     # V3A/B
     #dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
