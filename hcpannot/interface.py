@@ -247,20 +247,24 @@ subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
 
 contour_data = [
     # hV4:
+    dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
+         image='eccmax'),
     dict(name='hV4/VO1 Middle', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
          image='isoang_90', optional=True),
-    dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
-         image='eccrev'),
     dict(name='hV4 Ventral Boundary', save='hV4', legend='hV4', image='hV4',
-         start=('start', 'V3_ventral')),
-    # VO1 and VO2:
-    dict(name='V3v Extension', save='V3v_ext', legend='V3v_ext', image='isoang_vml',
          start=('end', 'V3_ventral')),
-    dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer', image='VO_outer'),
-    dict(name='VO1/2 Interior Boundary', save='VO_inner', legend='VO_inner', image='VO_inner'),
+    # VO1 and VO2:
+    #dict(name='V3v Extension', save='V3v_ext', legend='V3v_ext', image='isoang_vml',
+    #     start=('end', 'V3_ventral'), optional=True),
+    dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
+         image='VO_outer', end=('start', 'V3_ventral')),
+    dict(name='VO1/2 Interior Boundary', save='VO_inner', legend='VO_inner',
+         image='VO_inner'),
     # V3A/B
-    dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer', image='V3ab_outer'),
-    dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner', image='V3ab_inner'),
+    #dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
+    #     image='V3ab_outer'),
+    #dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner',
+    #     image='V3ab_inner'),
 ]
 contours = {cd['name']: cd for cd in contour_data}
 default_start_contour = contour_data[0]['name']
@@ -766,8 +770,19 @@ class ROITool(object):
         sid = self.curr_sid()
         h = self.curr_hemi()
         contour = self.curr_contour()
+        cd = contours[contour]
         ax = self.axes
         pts = self.clicks[sid][h][contour]
+        if len(pts) == 0 and 'start' in cd:
+            # These are pinned to HCP lines
+            (side,ln) = cd['start']
+            ln = np.transpose(subject_data[(sid,h)]['v123'][ln])
+            if side == 'start': pts = ln[[0]]
+            elif side == 'end': pts = ln[[-1]]
+            else:
+                raise ValueError("start tuple must start with 'start' or 'end'")
+            pts = flatmap_to_imgrid(pts)[0][0].T
+            self.clicks[sid][h][contour].append(pts[0])
         for c in self.draw_plot:
             c.remove()
         self.draw_plot = []
@@ -797,6 +812,8 @@ class ROITool(object):
         sid = self.curr_sid()
         h = self.curr_hemi()
         contour = self.curr_contour()
+        cd = contours[contour]
+        if 'start' in cd: return None
         tup = (sid,h,contour)
         cl0 = self.clicks[sid][h][contour]
         orig = self.clicks_updated.get(tup, None)
@@ -824,6 +841,8 @@ class ROITool(object):
         sid = self.curr_sid()
         h = self.curr_hemi()
         contour = self.curr_contour()
+        cd = contours[contour]
+        if 'start' in cd: return None
         tup = (sid,h,contour)
         cl0 = self.clicks[sid][h][contour]
         if len(cl0) == 0: return None
