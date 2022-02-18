@@ -257,10 +257,10 @@ contour_data = [
          image='isoang_vml', start=('end', 'V3_ventral')),
     dict(name='V3 Ventral Extension (*)', save='V3v_ext', legend='V3v_ext',
          image='isoang_vmu', optional=True),
-    dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
-         image='isoang_vml', start=('start', 'V3_ventral')),
     dict(name='VO1/VO2 Interior Boundary', save='VO1_VO2', legend='VO1_VO2',
          image='isoang_vmu'),
+    dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
+         image='isoang_vml', start=('start', 'V3_ventral')),
     # V3A/B
     #dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
     #     image='V3ab_outer'),
