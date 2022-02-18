@@ -248,13 +248,15 @@ subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
                            for h in ['lh','rh']})
 
 contour_data = [
-    # hV4:
+    # hV4, VO1, VO2:
     dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
-         image='eccpeak_6.25deg'),
+         image='eccpeak_6.25'),
     dict(name='hV4/VO1 Middle (*)', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
          image='isoang_90', optional=True),
     dict(name='hV4 Ventral Boundary', save='hV4', legend='hV4_ventral',
          image='isoang_vml', start=('end', 'V3_ventral')),
+    dict(name='V3 Ventral Extension (*)', save='V3v_ext', legend='V3v_ext',
+         image='isoang_vmu', optional=True),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
          image='isoang_vml', start=('start', 'V3_ventral')),
     dict(name='VO1/VO2 Interior Boundary', save='VO1_VO2', legend='VO1_VO2',
@@ -494,7 +496,7 @@ class ROITool(object):
         fig.canvas.footer_visible = False
         #ax.format_coord = lambda x,y: ''
         # Make the legend axes
-        self.legend_axes = fig.add_axes([0.35,0.35,0.3,0.3])
+        self.legend_axes = fig.add_axes([0.4,0.4,0.2,0.2])
         legim = legend_data[hemi].get(self.start_contour, None)
         if legim is None:
             legim = np.zeros((10,10,4))
