@@ -6,3 +6,8 @@ div#site{
 div#notebook{
   padding: 0;
 }
+
+$([IPython.events]).on('notebook_loaded.Notebook', function(){
+   $('#header').hide();
+   $('#maintoolbar').hide();
+});

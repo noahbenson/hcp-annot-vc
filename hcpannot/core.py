@@ -39,6 +39,7 @@ image_order = ('curvature',
                'isoecc_2',
                'isoecc_4',
                'isoecc_7',
+               'eccpeak_6.25',
                'thresh_polar_angle',
                'thresh_eccentricity',
                'thresh_isoang_90',
@@ -96,6 +97,16 @@ def plot_isoang(fmap, ang0, axes=None, scale=180, abs=True, cmap='highlight',
     mask=(None if cod_threshold is None else
           ('prf_variance_explained', cod_threshold, np.inf))
     return ny.cortex_plot(fmap, axes=axes, color=q, mask=mask,
+                          vmin=0, vmax=1, cmap=cmap)
+def plot_eccpeak(fmap, ecc0, cmap='highpeak', axes=None, cod_threshold=None):
+    ecc = fmap.prop('prf_eccentricity')
+    # Transform for the colormap.
+    ecc = (np.log(ecc + 0.75) - np.log(0.75)) / (np.log(ecc0) - np.log(0.75))
+    if cmap == 'highlight': cmap = highlight_cmap
+    elif cmap == 'highpeak': cmap = highpeak_cmap
+    mask=(None if cod_threshold is None else
+          ('prf_variance_explained', cod_threshold, np.inf))
+    return ny.cortex_plot(fmap, axes=axes, color=ecc, mask=mask,
                           vmin=0, vmax=1, cmap=cmap)
 def plot_vmbound(fmap, vd, axes=None, cmap='highpeak', cod_threshold=None):
     ang = np.array(fmap.prop('prf_polar_angle'))
@@ -191,6 +202,10 @@ def generate_images(fmap, cod_threshold=0.1):
         ims['isoecc_%d'%ecc] = curry(ppi, plot_isoecc, fmap, ecc)
         ims['thresh_isoecc_%d'%ecc] = curry(ppi, plot_isoecc, fmap, ecc,
                                              cod_threshold=cod_threshold)
+    # The eccen peak image for the hV4/VO1 eccentricity reversal
+    ims['eccpeak_6.25'] = curry(ppi, plot_eccpeak, fmap, 6.25)
+    ims['thresh_eccpeak_6.25'] = curry(ppi, plot_eccpeak, fmap, 6.25,
+                                       cod_threshold=cod_threshold)
     ims['isoang_90'] = curry(ppi, plot_isoang, fmap, 90, abs=True)
     ims['isoang_vmu'] = curry(ppi, plot_vmbound, fmap, 'v')
     ims['isoang_vml'] = curry(ppi, plot_vmbound, fmap, 'd')

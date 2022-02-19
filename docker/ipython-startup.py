@@ -7,7 +7,7 @@ from hcpannot import ROITool
 # and put it where ROITool can find it.
 import os
 git_username = os.popen("grep 'url = https://github.com/' ~/.extgit/config").read()
-git_username = git_username.split('github.com/')[-1].split('/hcp-annot-v123')[0]
+git_username = git_username.split('github.com/')[-1].split('/hcp-annot-vc')[0]
 os.environ['GIT_USERNAME'] = git_username
 # Make sure there is a directory for this user to save into.
 if not os.path.isdir(f'./save/{git_username}'):
