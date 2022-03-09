@@ -471,8 +471,8 @@ class ROITool(object):
             [widgets.Label('Contour Notes:'), self.notes_area],
             layout={'align_items': 'flex-start', 'width':'100%'})
         # The save and reset buttons:
-        self.save_button = widgets.Button(description='Save.')
-        self.reset_button = widgets.Button(description='Reset.')
+        self.save_button = widgets.Button(description='Save')
+        self.reset_button = widgets.Button(description='Reset')
         self.save_box = widgets.HBox(
             children=[self.save_button, self.reset_button],
             layout={'align_items': 'center'})
@@ -490,15 +490,16 @@ class ROITool(object):
                 concise=False,
                 value=mpl.colors.to_hex(clr),
                 layout=disp_layout)
-            for (_,_,_,clr) in csulc_labels}
+            for (_,_,abbrev,clr) in csulc_labels}
         self.csulc_disp_boxes = {
             abbrev: widgets.VBox(
                 (widgets.Label(f"{name}:"),
-                 widgets.VBox((shown, color), layout=dispinn_layout)),
-                layout=dispbox_layout)
-            for ((_,name,abbrev,_), shown, color) in zip(csulc_labels,
-                                                         self.csulc_showns,
-                                                         self.csulc_colors)}
+                 widgets.VBox([shown, color], layout=dispinn_layout)),
+                layout=(dispbox_layout | {'min_height': '96px'}))
+            for ((_,name,abbrev,_), shown, color) \
+            in zip(csulc_labels,
+                   self.csulc_showns.values(),
+                   self.csulc_colors.values())}
         # These are tuples of all the objects that have an influence on the
         # display of the widgets. They are sorted by tabs in the control panel.
         self.controls_select = (self.sid_select,
@@ -512,7 +513,10 @@ class ROITool(object):
                                  self.v123_disp_box,
                                  self.wang_disp_box)
         # One more tab for the cortical sulc outlines:
-        self.controls_csulc = tuple(self.csulc_disp_boxes.values())
+        self.all_csulc_button = widgets.Button(description='All')
+        self.none_csulc_button = widgets.Button(description='None')
+        self.controls_csulc = ((self.all_csulc_button, self.none_csulc_button) +
+                               tuple(self.csulc_disp_boxes.values()))
         self.controls = (self.controls_select +
                          self.controls_display +
                          self.controls_csulc)
@@ -525,17 +529,21 @@ class ROITool(object):
                           'flex_wrap': 'nowrap',
                           'align_items': 'center',
                           'justify_content': 'flex-start'}
+        csulc_layout = {'overflow_y':'auto', 'display':'block'} | control_layout
         self.select_panel = widgets.Box(self.controls_select,
                                          layout=control_layout)
         self.display_panel = widgets.Box(self.controls_display,
                                          layout=control_layout)
-        self.csulc_panel = widgets.Box(self.controls_csulc,
-                                       layout = control_layout)
+        self.csulc_panel = widgets.VBox(
+            [widgets.HBox([self.all_csulc_button, self.none_csulc_button]),
+             widgets.VBox(self.controls_csulc,
+                          layout=csulc_layout)])
         self.control_panel = widgets.Tab(children=[self.select_panel,
                                                    self.display_panel,
                                                    self.csulc_panel])
         self.control_panel.set_title(0, 'Selection')
         self.control_panel.set_title(1, 'Display')
+        self.control_panel.set_title(2, 'Labels')
         # Copy over the start/default values.
         sid = self.sid_select.value
         hemi = self.hemi_select.value.lower()
@@ -586,11 +594,12 @@ class ROITool(object):
         # Draw the CSulc contours and their initial visibilities.
         self.csulc_plots = {
             k: segs_decorate_plot(
-                ax, segs, color=self.csulc_colors[k].value, lw=0.33, zorder=12,
+                ax, {k:segs}, color=self.csulc_colors[k].value, lw=0.33, zorder=12,
                 grid=grid, imshape=imshape)
             for (k,segs) in subdata['csulc'].items()}
-        for (k,ln) in self.csulc_plots.items():
-            ln.set_visible(self.csulc_showns[k].value)
+        for (k,lns) in self.csulc_plots.items():
+            for ln in lns:
+                ln.set_visible(self.csulc_showns[k].value)
 
         # Initialize the display for this subject/hemi
         self.image_plot = ax.imshow(im0)
@@ -611,6 +620,8 @@ class ROITool(object):
                                          'value')
             self.csulc_colors[a].observe(curry(self.update, f'{a}_color'),
                                          'value')
+        self.all_csulc_button.on_click(lambda b:self.csulc_all())
+        self.none_csulc_button.on_click(lambda b:self.csulc_none())
         self.notes_area.observe(curry(self.update, 'notes'), 'value')
         self.save_button.on_click(lambda b:self.save())
         self.reset_button.on_click(lambda b:self.reset())
@@ -707,7 +718,7 @@ class ROITool(object):
         lw = self.csulc_lw
         zorder = 12
         segs = self.curr_subdata()['csulc']
-        plots = {k: self.update_lines(v, olds[k], vis[k], clr[k], lw, zorder)
+        plots = {k: self.update_lines({k:v}, {k:olds[k]}, vis[k], clr[k], lw, zorder)
                  for (k,v) in segs.items()}
         self.csulc_plot = plots
     def update_selection(self, sid=None, hemi=None, contour=None, save=True):
@@ -780,10 +791,10 @@ class ROITool(object):
             for ln in self.draw_plot: ln.set_color(c)
         elif var.endswith('_color'):
             c = change.new
-            self.csulc_plots[var[:-6]].set_color(c)
+            for ln in self.csulc_plots[var[:-6]]: ln.set_color(c)
         elif var in csulc_colors:
             c = change.new
-            self.csulc_plots[var].set_visible(c)
+            for ln in self.csulc_plots[var]: ln.set_visible(c)
         elif var == 'notes':
             sid = self.curr_sid()
             h = self.curr_hemi()
@@ -868,6 +879,18 @@ class ROITool(object):
             cl[sid] = r
         self.clicks = cl
         self.clicks_updated = {}
+    def csulc_all(self):
+        for plots in self.csulc_plots.values():
+            for ln in plots:
+                ln.set_visible(True)
+        for box in self.csulc_showns.values():
+            box.value = True
+    def csulc_none(self):
+        for plots in self.csulc_plots.values():
+            for ln in plots:
+                ln.set_visible(False)
+        for box in self.csulc_showns.values():
+            box.value = False
     def save(self):
         self.save_clicks()
         self.save_notes()
