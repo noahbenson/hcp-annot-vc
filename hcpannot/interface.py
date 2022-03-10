@@ -722,7 +722,7 @@ class ROITool(object):
         segs = self.curr_subdata()['csulc']
         plots = {k: self.update_lines({k:v}, olds[k], vis[k], clr[k], lw, zorder)
                  for (k,v) in segs.items()}
-        self.csulc_plot = plots
+        self.csulc_plots = plots
     def update_selection(self, sid=None, hemi=None, contour=None, save=True):
         if sid is None:
             sid = self.curr_sid()
