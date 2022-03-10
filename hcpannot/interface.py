@@ -535,9 +535,11 @@ class ROITool(object):
         self.display_panel = widgets.Box(self.controls_display,
                                          layout=control_layout)
         self.csulc_panel = widgets.VBox(
-            [widgets.HBox([self.all_csulc_button, self.none_csulc_button]),
+            [widgets.HBox([self.all_csulc_button, self.none_csulc_button],
+                          layout={'width': sidepanel_width}),
              widgets.VBox(self.controls_csulc,
-                          layout=csulc_layout)])
+                          layout=csulc_layout)],
+            layout=control_layout)
         self.control_panel = widgets.Tab(children=[self.select_panel,
                                                    self.display_panel,
                                                    self.csulc_panel])
@@ -594,7 +596,7 @@ class ROITool(object):
         # Draw the CSulc contours and their initial visibilities.
         self.csulc_plots = {
             k: segs_decorate_plot(
-                ax, {k:segs}, color=self.csulc_colors[k].value, lw=0.33, zorder=12,
+                ax, {k:segs}, color=self.csulc_colors[k].value, lw=0.33, zorder=8,
                 grid=grid, imshape=imshape)
             for (k,segs) in subdata['csulc'].items()}
         for (k,lns) in self.csulc_plots.items():
@@ -718,7 +720,7 @@ class ROITool(object):
         lw = self.csulc_lw
         zorder = 12
         segs = self.curr_subdata()['csulc']
-        plots = {k: self.update_lines({k:v}, {k:olds[k]}, vis[k], clr[k], lw, zorder)
+        plots = {k: self.update_lines({k:v}, olds[k], vis[k], clr[k], lw, zorder)
                  for (k,v) in segs.items()}
         self.csulc_plot = plots
     def update_selection(self, sid=None, hemi=None, contour=None, save=True):
@@ -749,6 +751,7 @@ class ROITool(object):
         if redraw_wang: self.update_wang()
         self.update_image()
         self.update_v123()
+        self.update_csulc()
         self.draw_work()
         self.redraw_contour()
         # Redraw the legend.
