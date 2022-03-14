@@ -8,5 +8,6 @@ services:
          - ${PWD}/hcpannot:/opt/conda/lib/python3.9/hcpannot
          - ${PWD}/save:/save
          - ${PWD}/.git:/home/jovyan/.extgit
+         - ${PWD}/docker/local_cache:/data
       environment:
         - DOCKER_STACKS_JUPYTER_CMD=notebook
