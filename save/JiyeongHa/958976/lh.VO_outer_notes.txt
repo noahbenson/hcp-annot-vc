@@ -1,0 +1,1 @@
+the lines seemed to create ROIs that are too big for VO1 and VO2 
