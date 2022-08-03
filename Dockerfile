@@ -70,6 +70,14 @@ COPY docker/ipython-startup.py /home/$NB_USER/.ipython/profile_default/startup/
 COPY docker/ipython_kernel_config.py /home/$NB_USER/.ipython/profile_default/
 COPY work/roi-drawing.ipynb /home/$NB_USER/open_me.ipynb
 
+# Make sure we have a place to put the hcpannot library.
+RUN LPP="`python -c 'import site; print(site.getusersitepackages())'`" \
+ && mkdir -p "$LPP" \
+ && cd "$LPP" \
+ && ln -s "$HOME"/.hcpannot-ext ./hcpannot
+
+    
+
 USER root
 RUN chown -R $NB_USER /home/$NB_USER/.ipython && chmod 700 /home/$NB_USER/.ipython
 USER $NB_USER
