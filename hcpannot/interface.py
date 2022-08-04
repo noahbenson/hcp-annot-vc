@@ -76,19 +76,23 @@ def imgrid_to_flatmap(pts,
     (ymin,ymax) = ylim
     xmu = 0.5*(xmin + xmax)
     ymu = 0.5*(ymin + ymax)
-    rpx2yu = -(ymax - ymin) / r
-    cpx2xu = (xmax - xmin) / c
+    rpx2yu = -(ymax - ymin) / rs
+    cpx2xu = (xmax - xmin) / cs
     (c,r) = pts if pts.shape[0] == 2 else pts.T
+    c = np.array(c)
+    r = np.array(r)
+    qq = 0
     while True:
         ii = c > cs
-        if len(ii) == 0: break
+        if not ii.any(): break
         c[ii] -= cs
+        qq += 1
     while True:
         ii = r > rs
-        if len(ii) == 0: break
+        if not ii.any(): break
         r[ii] -= rs
-    x = xmu + (cs - cmu)*cpx2xu
-    y = ymu + (rs - rmu)*rpx2yu
+    x = xmu + (c - cmu)*cpx2xu
+    y = ymu + (r - rmu)*rpx2yu
     return np.array([x,y])
 def flatmap_to_imgrid(pts,
                       grid=default_grid,
