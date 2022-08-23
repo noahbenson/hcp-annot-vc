@@ -288,11 +288,15 @@ contour_data = [
          image='isoang_vmu'),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
          image='isoang_vml', start=('start', 'V3_ventral')),
-    # V3A/B
-    #dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
-    #     image='V3ab_outer'),
-    #dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner',
-    #     image='V3ab_inner'),
+    # V3A/B, IPS0, LO1
+    dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
+         image='isoang_vmu', start=('end', 'V3_dorsal')),
+    dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner',
+         image='isoecc_0.5'),
+    dict(name='IPS0 Outer Boundary', save='IPS0_outer', legend='ips0_outer',
+         image='isoang_vml'),
+    dict(name='LO1 Outer Boundary', save='LO1_outer', legend='LO1_outer',
+         image='isoang_vmu', start=('end', 'V3_ventral')),
 ]
 contours = {cd['name']: cd for cd in contour_data}
 default_start_contour = contour_data[0]['name']
