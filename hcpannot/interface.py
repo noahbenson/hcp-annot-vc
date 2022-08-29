@@ -76,19 +76,23 @@ def imgrid_to_flatmap(pts,
     (ymin,ymax) = ylim
     xmu = 0.5*(xmin + xmax)
     ymu = 0.5*(ymin + ymax)
-    rpx2yu = -(ymax - ymin) / r
-    cpx2xu = (xmax - xmin) / c
+    rpx2yu = -(ymax - ymin) / rs
+    cpx2xu = (xmax - xmin) / cs
     (c,r) = pts if pts.shape[0] == 2 else pts.T
+    c = np.array(c)
+    r = np.array(r)
+    qq = 0
     while True:
         ii = c > cs
-        if len(ii) == 0: break
+        if not ii.any(): break
         c[ii] -= cs
+        qq += 1
     while True:
         ii = r > rs
-        if len(ii) == 0: break
+        if not ii.any(): break
         r[ii] -= rs
-    x = xmu + (cs - cmu)*cpx2xu
-    y = ymu + (rs - rmu)*rpx2yu
+    x = xmu + (c - cmu)*cpx2xu
+    y = ymu + (r - rmu)*rpx2yu
     return np.array([x,y])
 def flatmap_to_imgrid(pts,
                       grid=default_grid,
@@ -186,11 +190,16 @@ def clicks_update_plot(ax, plots, pts, grid=default_grid, imshape=default_imshap
             plot.set_data(x+dx, y+dy)
     return plots
 
-# Functions for loading data.
+# Functions for loading data. ##################################################
 def load_sub_v123(sid):
     path = ny.util.pseudo_path(default_osf_url,
                                cache_path=default_load_path)
     path = path.local_path('annot-v123', '%d.json.gz' % (sid,))
+    return ny.load(path)
+def load_sub_csulc(sid):
+    path = ny.util.pseudo_path(default_osf_url,
+                               cache_path=default_load_path)
+    path = path.local_path('annot-csulc', '%d.json.gz' % (sid,))
     return ny.load(path)
 def load_subimage(sid, h, name,
                   load_path=default_load_path, osf_url=default_osf_url):
@@ -222,6 +231,8 @@ def plot_imcat(ims, grid, k):
 # each hemisphere).
 v123_contours = pimms.lmap({s: ny.util.curry(load_sub_v123, s)
                             for s in subject_ids})
+csulc_contours = pimms.lmap({s: ny.util.curry(load_sub_csulc, s)
+                            for s in subject_ids})
 def prep_subdata(sid, h, load_path=None, osf_url=default_osf_url):
     if load_path is None: load_path = default_load_path
     if osf_url is None: osf_url = default_osf_url
@@ -238,15 +249,16 @@ def prep_subdata(sid, h, load_path=None, osf_url=default_osf_url):
     ims['wang'] = lambda:load_subwang(sid, h,
                                       load_path=load_path, osf_url=osf_url)
     ims['v123'] = lambda:v123_contours[sid][h]
+    ims['csulc'] = lambda:csulc_contours[sid][h]
     return pimms.lmap(ims)
 def curry_prep_subdata(sid, h,
                        load_path=default_load_path, osf_url=default_osf_url):
     return lambda:prep_subdata(sid, h, load_path=load_path, osf_url=osf_url)
-
 subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
                            for sid in subject_ids
                            for h in ['lh','rh']})
 
+# Drawn Contour Data
 contour_data = [
     # hV4, VO1, VO2:
     dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
@@ -261,15 +273,43 @@ contour_data = [
          image='isoang_vmu'),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
          image='isoang_vml', start=('start', 'V3_ventral')),
-    # V3A/B
-    #dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
-    #     image='V3ab_outer'),
-    #dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner',
-    #     image='V3ab_inner'),
+    # V3A/B, IPS0, LO1
+    dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
+         image='isoang_vmu', start=('end', 'V3_dorsal')),
+    dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner',
+         image='isoecc_0.5'),
+    dict(name='IPS0 Outer Boundary', save='IPS0_outer', legend='ips0_outer',
+         image='isoang_vml'),
+    dict(name='LO1 Outer Boundary', save='LO1_outer', legend='LO1_outer',
+         image='isoang_vmu', start=('end', 'V3_ventral')),
 ]
 contours = {cd['name']: cd for cd in contour_data}
 default_start_contour = contour_data[0]['name']
 
+# Cortical Sulcus data for plotting cotical sulc boundaries.
+csulc_labels = [
+    (2, 'Inferior Occipital Gyrus', 'IOG',             [ 0.5,  0.5,    1]),
+    (3, 'Fusiform Gyrus', 'FG',                        [   0,    0,    1]),
+    (6, 'Calcarine Sulcus', 'CaS',                     [   1,    1,    1]),
+    (7, 'Occipito-Temporal Sulcus', 'OTS',             [ 0.5,    1,  0.5]),
+    (8, 'Mid-Fusiform Sulcus', 'mFS',                  [   0,    0,  0.5]),
+    (13, 'Intra-Parietal Sulcus', 'IPS',               [0.25,    0,    0]),
+    (15, 'Posterior Superior Temporal Sulcus', 'pSTS', [   1,    1, 0.25]),
+    (16, 'Posterior Lingual Sulcus', 'PLS',            [0.25,    0, 0.25]),
+    (19, 'Superior Temporal Sulcus', 'STS',            [   1,  0.5,    0]),
+    (21, 'Anterior Lingual Sulcus', 'ALS',             [ 0.5,    0,  0.5]),
+    (23, 'Lateral Occipital Sulcus', 'LOS',            [   0,    0,    0]),
+    (24, 'Transverse Occipital Sulcus', 'TOS',         [   1,  0.5,  0.5]),
+    (25, 'Collateral Sulcus', 'CoS',                   [   1,    0,    1]),
+    (26, 'Inferior Temporal Sulcus', 'ITS',            [   0,  0.5,    0]),
+    (27, 'Posterior Collateral Sulcus', 'ptCoS',       [   1, 0.75,    1]),
+    (28, 'Parietal-Occipital Sulcus', 'POS',           [   1,    0,    0])
+]
+csulc_abbrevs = {lbl: abbrev for (lbl,nm,abbrev,clr) in csulc_labels}
+csulc_numbers = {abbrev: lbl for (lbl,nm,abbrev,clr) in csulc_labels}
+csulc_colors  = {abbrev: clr for (lbl,nm,abbrev,clr) in csulc_labels}
+
+# Legend loading/prep.
 def load_legimage(load_path, h, imname):
     from PIL import Image
     flname = os.path.join(load_path, 'legends', f'{h}_{imname}.png')
@@ -298,6 +338,7 @@ def prep_legends(load_path=default_load_path, osf_url=default_osf_url):
     return pyr.pmap(ims)
 legend_data = prep_legends()
 
+
 # #ROITool #####################################################################
 class ROITool(object):
     '''
@@ -308,12 +349,15 @@ class ROITool(object):
                  savedir=None,
                  start_contour=default_start_contour,
                  grid=default_grid, dpi=72*8,
-                 contour_lw=0.25, contour_ms=0.25):
+                 contour_lw=0.25, contour_ms=0.25,
+                 csulc_lw=0.33):
+        from neuropythy.util import curry
         # Copy over the simple parameters of the class first.
         self.grid = grid
         self.start_contour = start_contour
         self.contour_lw = contour_lw
         self.contour_ms = contour_ms
+        self.csulc_lw = csulc_lw
         # Parse a few arguments.
         if savedir is None:
             savedir = os.environ.get('GIT_USERNAME', None)
@@ -435,11 +479,35 @@ class ROITool(object):
             [widgets.Label('Contour Notes:'), self.notes_area],
             layout={'align_items': 'flex-start', 'width':'100%'})
         # The save and reset buttons:
-        self.save_button = widgets.Button(description='Save.')
-        self.reset_button = widgets.Button(description='Reset.')
+        self.save_button = widgets.Button(description='Save')
+        self.reset_button = widgets.Button(description='Reset')
         self.save_box = widgets.HBox(
             children=[self.save_button, self.reset_button],
             layout={'align_items': 'center'})
+        # Whether to show the each csulc contour's lines:
+        self.csulc_showns = {
+            abbrev: widgets.Checkbox(
+                description=f'Show {abbrev}?',
+                value=False,
+                indent=False,
+                layout=disp_layout)
+            for (_,_,abbrev,_) in csulc_labels}
+        # What color to use for the Wang lines:
+        self.csulc_colors = {
+            abbrev: widgets.ColorPicker(
+                concise=False,
+                value=mpl.colors.to_hex(clr),
+                layout=disp_layout)
+            for (_,_,abbrev,clr) in csulc_labels}
+        self.csulc_disp_boxes = {
+            abbrev: widgets.VBox(
+                (widgets.Label(f"{name}:"),
+                 widgets.VBox([shown, color], layout=dispinn_layout)),
+                layout=(dispbox_layout | {'min_height': '96px'}))
+            for ((_,name,abbrev,_), shown, color) \
+            in zip(csulc_labels,
+                   self.csulc_showns.values(),
+                   self.csulc_colors.values())}
         # These are tuples of all the objects that have an influence on the
         # display of the widgets. They are sorted by tabs in the control panel.
         self.controls_select = (self.sid_select,
@@ -452,7 +520,14 @@ class ROITool(object):
                                  self.work_disp_box,
                                  self.v123_disp_box,
                                  self.wang_disp_box)
-        self.controls = self.controls_select + self.controls_display
+        # One more tab for the cortical sulc outlines:
+        self.all_csulc_button = widgets.Button(description='All')
+        self.none_csulc_button = widgets.Button(description='None')
+        self.controls_csulc = ((self.all_csulc_button, self.none_csulc_button) +
+                               tuple(self.csulc_disp_boxes.values()))
+        self.controls = (self.controls_select +
+                         self.controls_display +
+                         self.controls_csulc)
         # Go ahead and make the control panel for both the selection and the
         # display tabs.
         control_layout = {'height': f"{figh*dpi*0.65}px",
@@ -462,13 +537,23 @@ class ROITool(object):
                           'flex_wrap': 'nowrap',
                           'align_items': 'center',
                           'justify_content': 'flex-start'}
+        csulc_layout = {'overflow_y':'auto', 'display':'block'} | control_layout
         self.select_panel = widgets.Box(self.controls_select,
                                          layout=control_layout)
         self.display_panel = widgets.Box(self.controls_display,
                                          layout=control_layout)
-        self.control_panel = widgets.Tab(children=[self.select_panel, self.display_panel])
+        self.csulc_panel = widgets.VBox(
+            [widgets.HBox([self.all_csulc_button, self.none_csulc_button],
+                          layout={'width': sidepanel_width}),
+             widgets.VBox(self.controls_csulc,
+                          layout=csulc_layout)],
+            layout=control_layout)
+        self.control_panel = widgets.Tab(children=[self.select_panel,
+                                                   self.display_panel,
+                                                   self.csulc_panel])
         self.control_panel.set_title(0, 'Selection')
         self.control_panel.set_title(1, 'Display')
+        self.control_panel.set_title(2, 'Labels')
         # Copy over the start/default values.
         sid = self.sid_select.value
         hemi = self.hemi_select.value.lower()
@@ -516,21 +601,38 @@ class ROITool(object):
             grid=grid, imshape=imshape)
         for ln in self.wang_plot:
             ln.set_visible(self.wang_shown.value)
+        # Draw the CSulc contours and their initial visibilities.
+        self.csulc_plots = {
+            k: segs_decorate_plot(
+                ax, {k:segs}, color=self.csulc_colors[k].value, lw=0.33, zorder=8,
+                grid=grid, imshape=imshape)
+            for (k,segs) in subdata['csulc'].items()}
+        for (k,lns) in self.csulc_plots.items():
+            for ln in lns:
+                ln.set_visible(self.csulc_showns[k].value)
+
         # Initialize the display for this subject/hemi
         self.image_plot = ax.imshow(im0)
         ax.axis('off')
         # Setup all the listener functions...
-        self.sid_select.observe(ny.util.curry(self.update, 'sid'), 'value')
-        self.hemi_select.observe(ny.util.curry(self.update, 'hemi'), 'value')
-        self.contour_select.observe(ny.util.curry(self.update, 'contour'), 'value')
-        self.wang_shown.observe(ny.util.curry(self.update, 'wang'), 'value')
-        self.work_shown.observe(ny.util.curry(self.update, 'work'), 'value')
-        self.v123_shown.observe(ny.util.curry(self.update, 'v123'), 'value')
-        self.wang_color.observe(ny.util.curry(self.update, 'wang_color'), 'value')
-        self.draw_color.observe(ny.util.curry(self.update, 'draw_color'), 'value')
-        self.work_color.observe(ny.util.curry(self.update, 'work_color'), 'value')
-        self.v123_color.observe(ny.util.curry(self.update, 'v123_color'), 'value')
-        self.notes_area.observe(ny.util.curry(self.update, 'notes'), 'value')
+        self.sid_select.observe(curry(self.update, 'sid'), 'value')
+        self.hemi_select.observe(curry(self.update, 'hemi'), 'value')
+        self.contour_select.observe(curry(self.update, 'contour'), 'value')
+        self.wang_shown.observe(curry(self.update, 'wang'), 'value')
+        self.work_shown.observe(curry(self.update, 'work'), 'value')
+        self.v123_shown.observe(curry(self.update, 'v123'), 'value')
+        self.wang_color.observe(curry(self.update, 'wang_color'), 'value')
+        self.draw_color.observe(curry(self.update, 'draw_color'), 'value')
+        self.work_color.observe(curry(self.update, 'work_color'), 'value')
+        self.v123_color.observe(curry(self.update, 'v123_color'), 'value')
+        for (_,_,a,_) in csulc_labels:
+            self.csulc_showns[a].observe(curry(self.update, a),
+                                         'value')
+            self.csulc_colors[a].observe(curry(self.update, f'{a}_color'),
+                                         'value')
+        self.all_csulc_button.on_click(lambda b:self.csulc_all())
+        self.none_csulc_button.on_click(lambda b:self.csulc_none())
+        self.notes_area.observe(curry(self.update, 'notes'), 'value')
         self.save_button.on_click(lambda b:self.save())
         self.reset_button.on_click(lambda b:self.reset())
         self.canvas_conns = [
@@ -619,6 +721,16 @@ class ROITool(object):
         segs = self.curr_subdata()['v123']
         plots = self.update_lines(segs, old_plots, vis, color, lw, zorder)
         self.v123_plot = plots
+    def update_csulc(self):
+        olds = self.csulc_plots
+        vis = {k:u.value for (k,u) in self.csulc_showns.items()}
+        clr = {k:u.value for (k,u) in self.csulc_colors.items()}
+        lw = self.csulc_lw
+        zorder = 12
+        segs = self.curr_subdata()['csulc']
+        plots = {k: self.update_lines({k:v}, olds[k], vis[k], clr[k], lw, zorder)
+                 for (k,v) in segs.items()}
+        self.csulc_plots = plots
     def update_selection(self, sid=None, hemi=None, contour=None, save=True):
         if sid is None:
             sid = self.curr_sid()
@@ -647,6 +759,7 @@ class ROITool(object):
         if redraw_wang: self.update_wang()
         self.update_image()
         self.update_v123()
+        self.update_csulc()
         self.draw_work()
         self.redraw_contour()
         # Redraw the legend.
@@ -687,6 +800,12 @@ class ROITool(object):
         elif var == 'draw_color':
             c = change.new
             for ln in self.draw_plot: ln.set_color(c)
+        elif var.endswith('_color'):
+            c = change.new
+            for ln in self.csulc_plots[var[:-6]]: ln.set_color(c)
+        elif var in csulc_colors:
+            c = change.new
+            for ln in self.csulc_plots[var]: ln.set_visible(c)
         elif var == 'notes':
             sid = self.curr_sid()
             h = self.curr_hemi()
@@ -771,6 +890,18 @@ class ROITool(object):
             cl[sid] = r
         self.clicks = cl
         self.clicks_updated = {}
+    def csulc_all(self):
+        for plots in self.csulc_plots.values():
+            for ln in plots:
+                ln.set_visible(True)
+        for box in self.csulc_showns.values():
+            box.value = True
+    def csulc_none(self):
+        for plots in self.csulc_plots.values():
+            for ln in plots:
+                ln.set_visible(False)
+        for box in self.csulc_showns.values():
+            box.value = False
     def save(self):
         self.save_clicks()
         self.save_notes()
