@@ -81,12 +81,10 @@ def imgrid_to_flatmap(pts,
     (c,r) = pts if pts.shape[0] == 2 else pts.T
     c = np.array(c)
     r = np.array(r)
-    qq = 0
     while True:
         ii = c > cs
         if not ii.any(): break
         c[ii] -= cs
-        qq += 1
     while True:
         ii = r > rs
         if not ii.any(): break
