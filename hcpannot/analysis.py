@@ -418,8 +418,6 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
     outer_norm = np.hstack([pts_ho[:, [pii[0]]],
                             outer[:, (oii[pii[0]] + 1):oii[pii[1]]],
                             pts_ho[:, [pii[1]]]])
-    print(hv4_vo1_norm)
-    print(outer_norm)
     # Now, we can find the intersection of outer and VO1/VO2.
     (vii, uii, pts_vu) = _cross_isect(vo1_vo2, outer_norm)
     if len(vii) != 2:
