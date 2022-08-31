@@ -1,0 +1,320 @@
+################################################################################
+# io.py
+#
+# Input and output tools for the HCP visual cortex contours.
+# by Noah C. Benson <nben@uw.edu>
+
+import sys, os, pimms, json
+import numpy as np
+import pyrsistent as pyr
+import neuropythy as ny
+
+from .analysis import (vc_plan, vc_contours, vc_contours_meanrater, meanrater,
+                       all_traces, to_data_path)
+
+
+def save_traces(traces, h, data_path, overwrite=True):
+    """Saves a dictionary of traces to a particular directory.
+    
+    `save_traces(traces, h, data_path)` saves a series of files named
+    `f"{h}.{key}_trace.json.gz"`, one per key-value pair in the `traces` dict,
+    out to the `save_path`, which must be an existing directory.
+    
+    The optional parameter `overwrite` (default: `True`) can be set to `False`
+    to require that the files are not overwritten if they already exist.
+    """
+    fls = {}
+    for (k,tr) in traces.items():
+        flnm = os.path.join(data_path, f'{h}.{k}_trace.json.gz')
+        if overwrite or not os.path.isfile(flnm):
+            # We need to clear the mesh field for this to work properly.
+            tr = tr.copy(map_projection=tr.map_projection.copy(mesh=None))
+            flnm = ny.save(flnm, ny.util.normalize(tr.normalize()), 'json')
+        fls[k] = flnm
+    return fls
+def export_traces(rater, sid, h, save_path,
+                  overwrite=True,
+                  vc_plan=vc_plan, 
+                  vc_contours=vc_contours):
+    """Calculates and saves the traces for a rater, subject, and hemisphere.
+
+    This function is intended to be called with `tupcall` and `mprun` functions
+    in order to process and save the traces of a single rater, subject, and
+    hemisphere in the HCP annotation project. The first three arguments of the
+    function are the `rater`, the `sid` (subject ID), and `h` (hemisphere).
+    
+    Parameters
+    ----------
+    rater : str
+        The rater whose contours should be processed.
+    sid : int
+        The HCP subject ID of the subject whose contours should be processed.
+    h : 'lh' or 'rh'
+        The hemisphere that should be processed.
+    save_path : directory name
+        The directory to which this set of traces should be saved. Traces
+        themselves are saved into a directory equivalen to
+        `os.path.join(save_path, rater, str(sid))`.
+    vc_plan : pimms calculation plan, optional
+        The plan that is to be executed on the contours. This plan must produce
+        an output value called `'traces'` that contains the traces to be saved
+        to disk. The default is `hcpannot.vc_plan`.
+    overwrite : boolean, optional
+        Whether to overwrite the files, should they exist. The default is
+        `True`.
+    vc_contours : dict
+        A dictionary whose keys are the names of the contours and whose values
+        are format strings for the filenames that store the given contours. The
+        contours correspond to those drawn by raters using the annotation tool.
+        The default is `hcpannot.analysis.vc_contours`.
+        
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the contour names and whose values are the
+        filenames to which the associated trace was saved.
+    """
+    dat = vc_plan(rater=rater, sid=sid, hemisphere=h,
+                  save_path=save_path,
+                  vc_contours=vc_contours)
+    h = dat['chirality']
+    return save_traces(dat['traces'], h, dat['data_path'],
+                       overwrite=overwrite)
+def load_traces(rater, sid, h, save_path,
+                traces=all_traces):
+    """Loads and returns a dict of traces, as saved by `export_traces`.
+
+    `load_traces(rater, sid, h, save_path)` returns a dictionary whose keys are
+    the names of traces and whose values are the traces that were saved out by
+    the `export_traces(rater, sid, h, save_path)` function.
+    """
+    data_path = to_data_path(rater, sid, save_path=save_path)
+    h = ny.to_hemi_str(h.split('_')[0])
+    r = {}
+    for flnm in os.listdir(data_path):
+        if not flnm.endswith('_trace.json.gz'): continue
+        (hh, k) = flnm.split('.')[:2]
+        k = k.split('_')[:-1]
+        k = '_'.join(k)
+        if hh != h or k not in traces: continue
+        tr = ny.load(os.path.join(data_path, flnm))
+        # This is a bug? #TODO
+        if isinstance(tr, dict):
+            pts = tr.pop('points')
+            if h == 'lh': pts = np.fliplr(pts)
+            mpj = tr.pop('map_projection')
+            tr = ny.geometry.PathTrace(mpj, pts, **tr)
+        r[k] = tr
+    return r
+def export_paths(rater, sid, h, save_path,
+                 overwrite=True):
+    """Calculates and saves the paths for a rater, subject, and hemisphere.
+
+    This function is intended to be called with `tupcall` and `mprun` functions
+    in order to process and save the paths of a single rater, subject, and
+    hemisphere in the HCP annotation project. The first three arguments of the
+    function are the `rater`, the `sid` (subject ID), and `h` (hemisphere). The
+    traces must already be calculated and saved to the given `save_path` prior
+    to calling this function.
+    
+    Parameters
+    ----------
+    rater : str
+        The rater whose traces should be processed.
+    sid : int
+        The HCP subject ID of the subject whose traces should be processed.
+    h : 'lh' or 'rh'
+        The hemisphere that should be processed.
+    save_path : directory name
+        The directory to which this set of traces should be saved. Traces
+        themselves are saved into a directory equivalen to
+        `os.path.join(save_path, rater, str(sid))`.
+    overwrite : boolean, optional
+        Whether to overwrite the files, should they exist. The default is
+        `True`.
+        
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the contour names and whose values are the
+        filenames to which the associated path was saved.
+    """
+    trs = load_traces(rater, sid, h, save_path=save_path)
+    data_path = to_data_path(rater, sid, save_path=save_path)
+    sub = ny.data['hcp_lines'].subjects[sid]
+    hem = sub.hemis[h]
+    r = []
+    for (k,tr) in trs.items():
+        flnm = os.path.join(data_path, f'{h}.{k}_path.json.gz')
+        if not overwrite and os.path.isfile(flnm): continue
+        p = tr.to_path(hem)
+        ny.save(flnm, p.addresses)
+        r.append(flnm)
+    return r
+def load_paths(rater, sid, h, save_path,
+               paths=('hV4', 'VO1', 'VO2')):
+    """Loads and returns a dict of paths, as saved by `export_paths`.
+
+    `load_paths(rater, sid, h, save_path)` returns a dictionary whose keys are
+    the names of paths and whose values are the paths that were saved out by the
+    `export_paths(rater, sid, h, save_path)` function.
+    """
+    data_path = to_data_path(rater, sid, save_path=save_path)
+    sub = ny.data['hcp_lines'].subjects[sid]
+    hem = sub.hemis[h]
+    h = ny.to_hemi_str(h.split('_')[0])
+    r = {}
+    for flnm in os.listdir(data_path):
+        if not flnm.endswith('_path.json.gz'): continue
+        (hh, k) = flnm.split('.')[:2]
+        if hh != h: continue
+        k = '_'.join(k.split('_')[:-1])
+        addr = ny.load(os.path.join(data_path, flnm))
+        if k in paths:
+            # We need to make sure the addresses are closed.
+            faces = np.asarray(addr['faces'])
+            barys = np.asarray(addr['coordinates'])
+            (f0,f1) = (faces[:,0], faces[:,-1])
+            (b0,b1) = (barys[:,0], barys[:,-1])
+            if not ((f0 == f1).all() and np.isclose(b0, b1).all()):
+                faces = np.hstack([faces, f0[:,None]])
+                barys = np.hstack([barys, b0[:,None]])
+                addr = {'faces': faces, 'coordinates': barys}
+        p = ny.geometry.Path(hem, addr)
+        r[k] = p
+    return r
+def export_means(sid, h, save_path,
+                 raters=None,
+                 npoints=500,
+                 overwrite=True,
+                 mkdir=True,
+                 mkdir_mode=0o775,
+                 vc_contours=vc_contours_meanrater,
+                 meanrater=meanrater):
+    """Calculates and saves the mean contours for a subject and hemisphere.
+
+    This function is intended to be called with `tupcall` and `mprun` functions
+    in order to process and save the traces of a single subject and hemisphere
+    in the HCP annotation project. The first two arguments of the function are
+    the `sid` (subject ID) and `h` (hemisphere).
+    
+    Parameters
+    ----------
+    sid : int
+        The HCP subject ID of the subject whose contours should be processed.
+    h : 'lh' or 'rh'
+        The hemisphere that should be processed.
+    save_path : directory name
+        The directory to which this set of traces should be saved. Traces
+        themselves are saved into a directory equivalen to
+        `os.path.join(save_path, rater, str(sid))`.
+    raters : None or list of str, optional
+        Either a list of raters that are to be included in the mean contours
+        or `None` if all available raters should be included. The default is
+        `None`.
+    npoints : int, optional
+        The number of points to divide each contour up into when averaging
+        across raters. The default is 500.
+    overwrite : boolean, optional
+        Whether to overwrite the files, should they exist. The default is
+        `True`.
+    vc_contours : dict, optional
+        A dictionary whose keys are the names of the contours and whose values
+        are format strings for the filenames that store the given contours. The
+        contours correspond to those drawn by raters using the annotation tool.
+        The default is `hcpannot.analysis.vc_contours_meanrater`.
+    meanrater : str, optional
+        The name to use for the mean rater. By default this is the value in
+        `hcpannot.analysis.meanrater`, which is `'mean'`.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the contour names and whose values are a
+        two-tuple of `(filename, raterlist)` where `filename` is the path to
+        which the associated mean contour was saved and `raterlist` is a list
+        of the raters whose contours were averaged in order to make the contour
+        that was exported.
+    """
+    # This is where we will eventually save these contour files.
+    data_path = to_data_path(meanrater, sid, save_path=save_path)
+    # First, check if these data already exist (if we're not overwriting).
+    if not overwrite and os.path.isdir(data_path):
+        try:
+            cs = load_contours(meanrater, sid, h, save_path,
+                               vc_contours=vc_contours)
+            if len(cs) > len(vc_contours):
+                cs = {c:v for (c,v) in cs if c in vc_contours}
+            if all(c in cs for c in vc_contours):
+                return cs
+        except Exception:
+            pass
+    # First things first: we need to load in the traces of all raters.
+    save_path = os.path.expanduser(os.path.expandvars(save_path))
+    if raters is None:
+        from os.path import isdir
+        from os.path import join as pathjoin
+        raters = [flnm for flnm in os.listdir(save_path)
+                  if not flnm.startswith('.')
+                  if isdir(pathjoin(save_path, flnm))]
+    trs = {}
+    for rater in raters:
+        # Try loading the traces.
+        try:
+            tr = load_traces(rater, sid, h, save_path)
+        except Exception:
+            tr = ()
+        if len(tr) == 0: continue
+        # Turn these into linspaced points.
+        trs[rater] = {k: v.copy(points=v.curve.linspace(npoints))
+                      for (k,v) in tr.items()}
+    # Process these into a mean map of contours.
+    meantrs = {}
+    rcounts = {}
+    for k in vc_contours:
+        trlist = [u for u in trs if k in u]
+        if len(trlist) == 0:
+            raise ValueError(f"no raters found for contour {k}")
+        meantrs[k] = np.mean([u[k] for u in trlist], axis=0)
+        rcounts[k] = len(trlist)
+    # Save the means; this gives us back a dict of filenames.
+    res = save_contours(meanrater, sid, h, trs, save_path,
+                        overwrite=overwrite,
+                        vc_contours=vc_contours,
+                        mkdir=mkdir,
+                        mkdir_mode=mkdir_mode)
+    # Finally, process the results into a dict whose values are tuples
+    # of the (filename, ratercount).
+    res = {k: (v,rcounts[k]) for (k,v) in res.items()}
+    return res
+def calc_surface_areas(rater, sid, h, save_path,
+                       boundaries=('hV4', 'VO1', 'VO2')):
+    """Returns the surface area of each visual area as a dict.
+
+    `calc_surface_areas(rater, sid, h, save_path)` returns a dict whose keys are
+    the names of the boundary paths for the given rater, subject ID, and
+    hemisphere, and whose values are the surface areas of each boundary.
+    
+    The optional argument `boundaries` may be passed to specify that the surface
+    areas of specific boundaries be computed; the default is
+    `('hV4', 'VO1', 'VO2')`.
+    """
+    ps = load_paths(rater, sid, h, save_path)
+    hem = None
+    for k in boundaries:
+        if k not in ps:
+            raise ValueError(f"path {k} not found for {rater}/{sid}/{h}")
+        elif hem is None:
+            hem = ps[k].surface
+    # This is the surface area that is calculated by the surface_area map;
+    # i.e., paths don't know about the vertex map that uses NaNs along the
+    # medial surface, it just knows about triangle areas.
+    c = np.nansum(hem.midgray_surface.face_areas)
+    r = {k: (np.nan if p.surface_area is None else p.surface_area['midgray'])
+         for (k,p) in ps.items()
+         if k in ('hV4', 'VO1', 'VO2')}
+    # Make sure we calculated the correct internal (not external) area.
+    r = {k: (v if v < (c - v) else (c - v)) for (k,v) in r.items()}
+    # This value is the cortical surface area excluding the medial wall.
+    r['cortex'] = np.nansum(hem.prop('midgray_surface_area'))
+    return r
