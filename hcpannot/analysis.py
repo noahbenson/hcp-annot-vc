@@ -316,9 +316,9 @@ def calc_extended_contours(rater, raw_contours, chirality, v3v_contour,
         outer = [np.fliplr(contours['hV4_outer']),
                  np.fliplr(v3v_contour),
                  contours['VO_outer']]
-        outer_sources = (['hV4_outer'] * outer[0].shape[1] + 
+        outer_sources = (['hV4_outer'] * (outer[0].shape[1] + 1) + 
                          ['V3v'] * outer[1].shape[1] +
-                         ['VO_outer'] * outer[2].shape[1])
+                         ['VO_outer'] * (outer[2].shape[1] + 1))
         outer = np.hstack(outer)
         outer_sources = np.array(outer_sources)
         contours['outer'] = outer
@@ -375,6 +375,7 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
         v3v_start = np.where(outer_sources == 'V3v')[0][0]
         voo_start = np.where(outer_sources == 'VO_outer')[0][0]
         v3v_dist = np.abs(voo_start - oii)
+        v3v_dist[(v3v_dist >= v3v_start) & (v3v_dist < voo_start)] = 0
         isect_ii = np.argmin(v3v_dist)
         # Now we just want the closest value in each direction from that point.
         v3v_dist = oii[isect_ii] - oii
