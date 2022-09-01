@@ -248,8 +248,8 @@ csulc_contours = pimms.lmap({s: ny.util.curry(load_sub_csulc, s)
 def load_subdata(sid, h, load_path=None, osf_url=None):
     if load_path is None: load_path = default_load_path
     if osf_url is None: osf_url = default_osf_url
-    dirname = os.path.join(load_path, str(sid))
-    if not os.path.isfile(dirname):
+    dirname = os.path.join(load_path, 'annot-images', str(sid))
+    if not os.path.isdir(dirname):
         pp = ny.util.pseudo_path(osf_url)
         path = pp.local_path('annot-images', '%d.tar.gz' % sid)
         outpath = os.path.join(load_path, 'annot-images')
@@ -275,7 +275,7 @@ subject_data = prep_subdata()
 
 # Drawn Contour Data
 contour_data = [
-    # hV4, VO1, VO2:
+    # Ventral Contours: hV4, VO1, VO2:
     dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
          image='eccpeak_6.25'),
     dict(name='hV4/VO1 Middle (*)', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
@@ -288,7 +288,7 @@ contour_data = [
          image='isoang_vmu'),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
          image='isoang_vml', start=('start', 'V3_ventral')),
-    # V3A/B, IPS0, LO1
+    # Dorsal Contours: V3A/B, IPS0, LO1
     dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
          image='isoang_vmu', start=('end', 'V3_dorsal')),
     dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner',
