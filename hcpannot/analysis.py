@@ -328,7 +328,7 @@ def calc_extended_contours(rater, raw_contours, chirality, v3v_contour,
     ext_contours = {k:_extend_contour(c) for (k,c) in contours.items()}
     # And return!
     return (contours, ext_contours, outer_sources)
-def _cross_isect(segs1, segs2):
+def _cross_isect(segs1, segs2, rtol=1e-05, atol=1e-08):
     from neuropythy.geometry.util import segment_intersection_2D
     (segs1, segs2) = (np.asarray(segs1), np.asarray(segs2))
     (n1, n2) = (segs1.shape[1] - 1, segs2.shape[1] - 1)
@@ -347,7 +347,14 @@ def _cross_isect(segs1, segs2):
     ds = [np.sum(seglen2s[:ii1[ii]]) + np.sum((segs1[:, ii1[ii]] - pts[:,ii])**2)
           for ii in range(len(ii1))]
     ii = np.argsort(ds)
-    return (ii1[ii], ii2[ii], pts[:,ii])
+    (ii1, ii2, pts) = (ii1[ii], ii2[ii], pts[:,ii])
+    # See if we have accidentally created identical points.
+    for ii in reversed(range(pts.shape[1] - 1)):
+        if np.isclose(pts[:,ii], pts[:,ii+1], atol=atol, rtol=rtol).all():
+            ii1 = np.delete(ii1, ii+1)
+            ii2 = np.delete(ii2, ii+1)
+            pts = np.delete(pts, ii+1, axis=-1)
+    return (ii1, ii2, pts)
 def _closer(x, a, b):
     da2 = np.sum((x - a)**2)
     db2 = np.sum((x - b)**2)
