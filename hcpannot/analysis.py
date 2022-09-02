@@ -141,7 +141,7 @@ def save_contours(rater, sid, h, contours, save_path,
     import os, neuropythy as ny, pyrsistent as pyr
     data_path = to_data_path(rater, sid, save_path=save_path)
     if mkdir and not os.path.isdir(data_path):
-        os.mkdirs(data_path, mode=mkdir_mode)
+        os.makedirs(data_path, mode=mkdir_mode)
     h = ny.to_hemi_str(h)
     fls = {}
     for (name,fname) in vc_contours.items():
@@ -336,7 +336,8 @@ def _cross_isect(segs1, segs2, rtol=1e-05, atol=1e-08):
     ii2 = np.arange(n2)
     ii2 = np.concatenate([ii2]*n1)
     pts = segment_intersection_2D([segs1[...,ii1], segs1[...,ii1+1]],
-                                  [segs2[...,ii2], segs2[...,ii2+1]])
+                                  [segs2[...,ii2], segs2[...,ii2+1]],
+                                  inclusive=True)
     pts = np.asarray(pts)
     ii = np.all(np.isfinite(pts), axis=0)
     (ii1, ii2, pts) = (ii1[ii], ii2[ii], pts[:,ii])
