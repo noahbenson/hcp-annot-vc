@@ -10,7 +10,7 @@ import pyrsistent as pyr
 import neuropythy as ny
 
 from .analysis import (vc_plan, vc_contours, vc_contours_meanrater, meanrater,
-                       all_traces, to_data_path)
+                       all_traces, to_data_path, save_contours, load_contours)
 
 
 def save_traces(traces, h, data_path, overwrite=True):
@@ -272,13 +272,13 @@ def export_means(sid, h, save_path,
     meantrs = {}
     rcounts = {}
     for k in vc_contours:
-        trlist = [u for u in trs if k in u]
+        trlist = [u for u in trs.values() if k in u]
         if len(trlist) == 0:
             raise ValueError(f"no raters found for contour {k}")
-        meantrs[k] = np.mean([u[k] for u in trlist], axis=0)
+        meantrs[k] = np.mean([u[k].points for u in trlist], axis=0)
         rcounts[k] = len(trlist)
     # Save the means; this gives us back a dict of filenames.
-    res = save_contours(meanrater, sid, h, trs, save_path,
+    res = save_contours(meanrater, sid, h, meantrs, save_path,
                         overwrite=overwrite,
                         vc_contours=vc_contours,
                         mkdir=mkdir,
@@ -317,4 +317,8 @@ def calc_surface_areas(rater, sid, h, save_path,
     r = {k: (v if v < (c - v) else (c - v)) for (k,v) in r.items()}
     # This value is the cortical surface area excluding the medial wall.
     r['cortex'] = np.nansum(hem.prop('midgray_surface_area'))
+    # Add in the rest of the ID stuff and return.
+    r['rater'] = rater
+    r['sid'] = sid
+    r['hemisphere'] = h
     return r
