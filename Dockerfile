@@ -17,7 +17,7 @@ USER $NB_USER
 
 # Install some stuff...
 RUN conda update --yes -n base conda && conda install --yes py4j nibabel s3fs
-RUN conda install --yes -c conda-forge ipywidgets
+RUN conda install --yes -c conda-forge ipywidgets pip
 RUN pip install --upgrade setuptools
 RUN pip install 'ipyvolume>=0.5.1'
 
