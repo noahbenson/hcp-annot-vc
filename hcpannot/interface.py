@@ -26,9 +26,10 @@ default_ylim = (-100, 100)
 # the current contour's highlight.
 default_grid = ((None,        'polar_angle'),
                 ('curvature', 'eccentricity'))
-# The path that we load images from by default.
-default_load_path = '/data'
-default_osf_url = 'osf://tery8/'
+# The path that we load images from by default. We want to use an environment
+# variable if possible, otherwise we default to /data.
+default_load_path = os.environ.get('HCPANNOT_LOAD_PATH', '/data')
+default_osf_url   = os.environ.get('HCPANNOT_OSF_URL', 'osf://tery8/')
 
 # The HCP Retinotopy subjects:
 subject_ids = (100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
@@ -56,15 +57,19 @@ subject_ids = (100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
                958976, 966975, 971160, 973770, 995174)
 
 def imgrid_to_flatmap(pts,
-                      grid=default_grid,
-                      imshape=default_imshape,
-                      xlim=default_xlim,
-                      ylim=default_ylim):
+                      grid=None,
+                      imshape=None,
+                      xlim=None,
+                      ylim=None):
     '''
     `imgrid_to_flatmap(pts)` yields a 2xN matrix the same size as the given
       (2xN) matrix `pts`, for which the points have been converted from
       coordinates in the given image grid (`grid` option).
     '''
+    if grid is None: grid = default_grid
+    if imshape is None: imshape = default_imshape
+    if xlim is None: xlim = default_xlim
+    if ylim is None: ylim = default_ylim
     pts = np.array(pts)
     (R,C) = imshape[:2]
     rg = len(grid)
@@ -93,16 +98,20 @@ def imgrid_to_flatmap(pts,
     y = ymu + (r - rmu)*rpx2yu
     return np.array([x,y])
 def flatmap_to_imgrid(pts,
-                      grid=default_grid,
-                      imshape=default_imshape,
-                      xlim=default_xlim,
-                      ylim=default_ylim):
+                      grid=None,
+                      imshape=None,
+                      xlim=None,
+                      ylim=None):
     '''
     `flatmap_to_imgrid(pts)` yields a 2xN matrix the same size as the given
       (2xN) matrix `pts`, for which the points have been converted from
       coordinates in the default flatmap representation to the given
       image grid (`grid` option).
     '''
+    if grid is None: grid = default_grid
+    if imshape is None: imshape = default_imshape
+    if xlim is None: xlim = default_xlim
+    if ylim is None: ylim = default_ylim
     pts = np.asarray(pts)
     (R,C) = imshape[:2]
     rg = len(grid)
@@ -173,7 +182,9 @@ def clicks_decorate_plot(ax, pts, *args, **kw):
             pp = ax.plot(x + cs*c, y + rs*r, *args, **kw)
             for p in pp: plots.append(p)
     return plots
-def clicks_update_plot(ax, plots, pts, grid=default_grid, imshape=default_imshape):
+def clicks_update_plot(ax, plots, pts, grid=None, imshape=None):
+    if grid is None: grid = default_grid
+    if imshape is None: imshape = default_imshape
     (rs,cs) = imshape[:2]
     rs /= len(grid)
     cs /= len(grid[0])
@@ -189,30 +200,33 @@ def clicks_update_plot(ax, plots, pts, grid=default_grid, imshape=default_imshap
     return plots
 
 # Functions for loading data. ##################################################
-def load_sub_v123(sid):
-    path = ny.util.pseudo_path(default_osf_url,
-                               cache_path=default_load_path)
+def load_sub_v123(sid, load_path=None, osf_url=None):
+    if load_path is None: load_path = default_load_path
+    if osf_url is None: osf_url = default_osf_url
+    path = ny.util.pseudo_path(osf_url, cache_path=load_path)
     path = path.local_path('annot-v123', '%d.json.gz' % (sid,))
     return ny.load(path)
-def load_sub_csulc(sid):
-    path = ny.util.pseudo_path(default_osf_url,
-                               cache_path=default_load_path)
+def load_sub_csulc(sid, load_path=None, osf_url=None):
+    if load_path is None: load_path = default_load_path
+    if osf_url is None: osf_url = default_osf_url
+    path = ny.util.pseudo_path(osf_url, cache_path=load_path)
     path = path.local_path('annot-csulc', '%d.json.gz' % (sid,))
     return ny.load(path)
-def load_subimage(sid, h, name,
-                  load_path=default_load_path, osf_url=default_osf_url):
+def load_subimage(sid, h, name, load_path=None):
     from PIL import Image
-    flnm = os.path.join(load_path, str(sid), '%d_%s_%s.png' % (sid, h, name))
+    if load_path is None: load_path = default_load_path
+    flnm = os.path.join(load_path, 'annot-images', str(sid),
+                        '%d_%s_%s.png' % (sid, h, name))
     with Image.open(flnm) as im:
         arr = np.array(im)
     return arr
-def curry_load_subimage(sid, h, name,
-                        load_path=default_load_path, osf_url=default_osf_url):
-    return lambda:load_subimage(sid, h, name,
-                                load_path=load_path, osf_url=osf_url)
-def load_subwang(sid, h, load_path=default_load_path, osf_url=default_osf_url):
+def curry_load_subimage(sid, h, name, load_path=None):
+    return lambda:load_subimage(sid, h, name, load_path=load_path)
+def load_subwang(sid, h, load_path=None):
     import neuropythy as ny
-    flnm = os.path.join(load_path, str(sid), '%d_%s_wang.mgz' % (sid, h))
+    if load_path is None: load_path = default_load_path
+    flnm = os.path.join(load_path, 'annot-images', str(sid),
+                        '%d_%s_wang.mgz' % (sid, h))
     return np.array(ny.load(flnm, 'mgh', to='data'))
 def imcat(grid):
     col = [np.concatenate(row, axis=1) for row in grid]
@@ -231,34 +245,37 @@ v123_contours = pimms.lmap({s: ny.util.curry(load_sub_v123, s)
                             for s in subject_ids})
 csulc_contours = pimms.lmap({s: ny.util.curry(load_sub_csulc, s)
                             for s in subject_ids})
-def prep_subdata(sid, h, load_path=None, osf_url=default_osf_url):
+def load_subdata(sid, h, load_path=None, osf_url=None):
     if load_path is None: load_path = default_load_path
     if osf_url is None: osf_url = default_osf_url
-    dirname = os.path.join(load_path, str(sid))
-    if not os.path.isfile(dirname):
+    dirname = os.path.join(load_path, 'annot-images', str(sid))
+    if not os.path.isdir(dirname):
         pp = ny.util.pseudo_path(osf_url)
         path = pp.local_path('annot-images', '%d.tar.gz' % sid)
+        outpath = os.path.join(load_path, 'annot-images')
         import tarfile
         with tarfile.open(path) as fl:
-            fl.extractall(load_path)
-    ims = {imname: curry_load_subimage(sid, h, imname,
-                                       load_path=load_path, osf_url=osf_url)
+            fl.extractall(outpath)
+        # We can go ahead and delete that tarball after we have extracted it;
+        # it's just a temporary file anyway.
+        os.remove(path)
+    ims = {imname: curry_load_subimage(sid, h, imname, load_path=load_path)
            for imname in image_order}
-    ims['wang'] = lambda:load_subwang(sid, h,
-                                      load_path=load_path, osf_url=osf_url)
+    ims['wang'] = lambda:load_subwang(sid, h, load_path=load_path)
     ims['v123'] = lambda:v123_contours[sid][h]
     ims['csulc'] = lambda:csulc_contours[sid][h]
     return pimms.lmap(ims)
-def curry_prep_subdata(sid, h,
-                       load_path=default_load_path, osf_url=default_osf_url):
-    return lambda:prep_subdata(sid, h, load_path=load_path, osf_url=osf_url)
-subject_data = pimms.lmap({(sid,h): curry_prep_subdata(sid, h)
-                           for sid in subject_ids
-                           for h in ['lh','rh']})
+def curry_load_subdata(sid, h, load_path=None, osf_url=None):
+    return lambda:load_subdata(sid, h, load_path=load_path, osf_url=osf_url)
+def prep_subdata(load_path=None, subject_ids=subject_ids, osf_url=None):
+    return pimms.lmap({(sid,h): curry_load_subdata(sid, h, load_path, osf_url)
+                       for sid in subject_ids
+                       for h in ['lh','rh']})
+subject_data = prep_subdata()
 
 # Drawn Contour Data
 contour_data = [
-    # hV4, VO1, VO2:
+    # Ventral Contours: hV4, VO1, VO2:
     dict(name='hV4/VO1 Boundary', save='hV4_VO1', legend='hV4_VO1',
          image='eccpeak_6.25'),
     dict(name='hV4/VO1 Middle (*)', save='hV4_VO1_mid', legend='isoang_hV4_VO1_mid',
@@ -271,7 +288,7 @@ contour_data = [
          image='isoang_vmu'),
     dict(name='VO1+VO2 Outer Boundary', save='VO_outer', legend='VO_outer',
          image='isoang_vml', start=('start', 'V3_ventral')),
-    # V3A/B, IPS0, LO1
+    # Dorsal Contours: V3A/B, IPS0, LO1
     dict(name='V3A/B Outer Boundary', save='V3ab_outer', legend='V3ab_outer',
          image='isoang_vmu', start=('end', 'V3_dorsal')),
     dict(name='V3A/B Inner Boundary', save='V3ab_inner', legend='V3ab_inner',
@@ -319,7 +336,9 @@ def load_legimage(load_path, h, imname):
     return arr
 def curry_load_legimage(load_path, h, imname):
     return lambda:load_legimage(load_path, h, imname)
-def prep_legends(load_path=default_load_path, osf_url=default_osf_url):
+def prep_legends(load_path=None, osf_url=None):
+    if load_path is None: load_path = default_load_path
+    if osf_url is None: osf_url = default_osf_url
     dirname = os.path.join(load_path, 'legends')
     if not os.path.isfile(dirname):
         pp = ny.util.pseudo_path(osf_url)
@@ -345,11 +364,14 @@ class ROITool(object):
     def __init__(self,
                  figsize=1, sidepanel_width='250px', dropdown_width='85%',
                  savedir=None,
-                 start_contour=default_start_contour,
-                 grid=default_grid, dpi=72*8,
+                 start_contour=None,
+                 grid=None, dpi=72*8,
                  contour_lw=0.25, contour_ms=0.25,
                  csulc_lw=0.33):
         from neuropythy.util import curry
+        # Parse default arguments.
+        if start_contour is None: start_contour = default_start_contour
+        if grid is None: grid = default_grid
         # Copy over the simple parameters of the class first.
         self.grid = grid
         self.start_contour = start_contour
