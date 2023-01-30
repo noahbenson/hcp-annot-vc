@@ -5,7 +5,7 @@ services:
       ports:
          - "8888:8888"
       volumes:
-         - ${PWD}/hcpannot:/opt/conda/lib/python3.9/hcpannot
+         - ${PWD}/hcpannot:/home/jovyan/.hcpannot-ext
          - ${PWD}/save:/save
          - ${PWD}/.git:/home/jovyan/.extgit
          - ${PWD}/docker/local_cache:/data

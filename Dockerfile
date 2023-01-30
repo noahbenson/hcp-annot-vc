@@ -8,7 +8,7 @@
 #
 
 # Start with the Ubuntu for now
-FROM jupyter/scipy-notebook
+FROM jupyter/scipy-notebook:python-3.10.6
 
 # Note the Maintainer.
 MAINTAINER Noah C. Benson <nben@uw.edu>
@@ -17,7 +17,7 @@ USER $NB_USER
 
 # Install some stuff...
 RUN conda update --yes -n base conda && conda install --yes py4j nibabel s3fs
-RUN conda install --yes -c conda-forge ipywidgets
+RUN conda install --yes -c conda-forge ipywidgets pip
 RUN pip install --upgrade setuptools
 RUN pip install 'ipyvolume>=0.5.1'
 
@@ -33,8 +33,8 @@ COPY docker/jupyter_notebook_config.py /home/$NB_USER/.jupyter/
 # Install collapsible cell extensions...
 RUN conda install -c conda-forge jupyter_contrib_nbextensions
 RUN jupyter contrib nbextension install --user
-RUN jupyter nbextension enable collapsible_headings/main \
- && jupyter nbextension enable select_keymap/main
+RUN jupyter-nbextension enable collapsible_headings/main \
+ && jupyter-nbextension enable select_keymap/main
 
 # The root operations ...
 USER root
@@ -69,6 +69,14 @@ COPY docker/custom.js /home/$NB_USER/.jupyter/custom/
 COPY docker/ipython-startup.py /home/$NB_USER/.ipython/profile_default/startup/
 COPY docker/ipython_kernel_config.py /home/$NB_USER/.ipython/profile_default/
 COPY work/roi-drawing.ipynb /home/$NB_USER/open_me.ipynb
+
+# Make sure we have a place to put the hcpannot library.
+RUN LPP="`python -c 'import site; print(site.getusersitepackages())'`" \
+ && mkdir -p "$LPP" \
+ && cd "$LPP" \
+ && ln -s "$HOME"/.hcpannot-ext ./hcpannot
+
+    
 
 USER root
 RUN chown -R $NB_USER /home/$NB_USER/.ipython && chmod 700 /home/$NB_USER/.ipython
