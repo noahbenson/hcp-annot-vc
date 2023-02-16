@@ -135,3 +135,7 @@ docker/local_cache/*
 # Mac OS files
 .DS_Store
 ._.DS_Store
+
+# We want to ignore the outputs of the postprocessing notebook.
+*_trace.json.gz
+*_path.json.gz
