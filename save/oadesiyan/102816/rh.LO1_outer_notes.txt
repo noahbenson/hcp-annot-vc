@@ -1,1 +1,0 @@
-Tried following the feedback given for the V3a/b outer and IPS0, unsure where to draw/connect the LO1 outer boundary to the V3a/b contour.
