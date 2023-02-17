@@ -8,7 +8,7 @@
 #
 
 # Start with the Ubuntu for now
-FROM jupyter/scipy-notebook
+FROM jupyter/scipy-notebook:python-3.10.6
 
 # Note the Maintainer.
 MAINTAINER Noah C. Benson <nben@uw.edu>
@@ -33,8 +33,8 @@ COPY docker/jupyter_notebook_config.py /home/$NB_USER/.jupyter/
 # Install collapsible cell extensions...
 RUN conda install -c conda-forge jupyter_contrib_nbextensions
 RUN jupyter contrib nbextension install --user
-RUN jupyter nbextension enable collapsible_headings/main \
- && jupyter nbextension enable select_keymap/main
+RUN jupyter-nbextension enable collapsible_headings/main \
+ && jupyter-nbextension enable select_keymap/main
 
 # The root operations ...
 USER root
