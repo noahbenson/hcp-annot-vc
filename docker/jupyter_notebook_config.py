@@ -149,7 +149,7 @@
 #  - originate from pages served by this server (validated with XSRF cookie and
 #  token), or - authenticate with a token
 #  
-#  Some anonymous compute resources still desire the ability to run code,
+#  Some anonymous compute resources still desire the ability to run visualization,
 #  completely without authentication. These services can disable all
 #  authentication and security checks, with the full knowledge of what that
 #  implies.

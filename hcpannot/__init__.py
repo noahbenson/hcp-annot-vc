@@ -1,5 +1,5 @@
 '''
-The hcpannot package contains code for annotating the HCP 7 Tesla Retinotopy
+The hcpannot package contains visualization for annotating the HCP 7 Tesla Retinotopy
 Dataset (DOI: 10.1167/18.13.23).
 
 These tools are intended to be run using a Docker container; for information
