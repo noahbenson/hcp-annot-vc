@@ -1,1 +1,1 @@
-from plot_surface_area import *
+from . import plot_annot_properties
