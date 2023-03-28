@@ -47,7 +47,7 @@ def heatmap_surface_area(df, mask=None, height=7, cmap="YlOrRd",
                          fmt=".2f", vmin=0, vmax=1):
     sns.set(style={'axes.facecolor': 'white', 'font.family': 'Helvetica'},
             rc={'axes.labelpad': 20, 'figure.figsize': (height, height)},
-            font_scale=1.5)
+            font_scale=height/4)
     if annot is True:
         annot_kws = {"size": 35 / np.sqrt(len(df))}
     else:
