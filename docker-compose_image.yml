@@ -1,0 +1,13 @@
+version: '3'
+services:
+   hcp-annotate:
+      image: nben/hcp-annot-vc:20230329
+      ports:
+         - "8888:8888"
+      volumes:
+         - ${PWD}/hcpannot:/home/jovyan/.hcpannot-ext
+         - ${PWD}/save:/save
+         - ${PWD}/.git:/home/jovyan/.extgit
+         - ${PWD}/docker/local_cache:/data
+      environment:
+        - DOCKER_STACKS_JUPYTER_CMD=notebook
