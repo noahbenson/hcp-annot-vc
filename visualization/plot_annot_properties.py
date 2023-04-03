@@ -86,18 +86,23 @@ def violinplot_surface_area(df, x, x_order, hue='hemisphere', hue_order=['lh','r
                     inner='box', linewidth=2, saturation=0.9, bw=.15, edgecolor='black')
     grid.set_axis_labels('', y_label)
     grid.add_legend(title=hue.title(), bbox_to_anchor=(1, 0.87))
+    # for ax in grid.axes:
+    #     ax.tick_params(bottom=False)
     if col is None:
+        grid.ax.tick_params(bottom=False)
         for edge in range(df[x].nunique() * 3):
             grid.ax.collections[edge].set_edgecolor('black')
         for edge in range(df[x].nunique()):
             grid.ax.get_children()[4 + (edge) * 5].set_color('black')
             grid.ax.get_children()[5 + (edge) * 5].set_color('black')
+
     else:
         plt.subplots_adjust(hspace=0.2)
         for subplot_title, ax in grid.axes_dict.items():
             ax.set_title(subplot_title, pad=40)
         for ax in grid.axes:
             ax.title.set_position([.5, 2])
+            ax.tick_params(bottom=False)
             for edge in range(df[x].nunique() * 3):
                 ax.collections[edge].set_edgecolor('black')
             for edge in range(df[x].nunique()):
