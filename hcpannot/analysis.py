@@ -50,6 +50,10 @@ vc_contours = {'hV4_VO1': '{hemisphere}.hV4_VO1.json',
                'VO1_VO2': '{hemisphere}.VO1_VO2.json',
                'hV4_outer': '{hemisphere}.hV4.json',
                'VO_outer': '{hemisphere}.VO_outer.json'}
+vc_contours_dorsal = {'V3ab_outer': '{hemisphere}.V3ab_outer.json',
+                      'V3ab_inner': '{hemisphere}.V3ab_inner.json',
+                      'IPS0_outer': '{hemisphere}.IPS0_outer.json',
+                      'LO1_outer':  '{hemisphere}.LO1_outer.json'}
 vc_contours_meanrater = {'hV4_VO1': '{hemisphere}.hV4_VO1.json',
                          'VO1_VO2': '{hemisphere}.VO1_VO2.json',
                          'outer': '{hemisphere}.outer.json'}
@@ -432,6 +436,10 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
     if len(vii) != 2:
         raise RuntimeError(f"{len(vii)} VO1-VO2 / Outer intersections for "
                            f"{rater}/{sid}/{hemisphere}")
+    # If uii is descending, then VO1-VO2 is backwards.
+    if uii[1] < uii[0]:
+        vo1_vo2 = np.fliplr(vo1_vo2)
+        (vii, uii, pts_vu) = _cross_isect(vo1_vo2, outer_norm)
     vo1_vo2_norm = np.hstack([pts_vu[:,[0]], 
                               vo1_vo2[:, (vii[0]+1):(vii[1] + 1)],
                               pts_vu[:,[1]]])
@@ -442,7 +450,7 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
     hv4_b = np.hstack([
         # First, hV4 from V3-ventral to the hV4-outer.
         pts_ho[:, [0]],
-        hv4_vo1[:, (hii_v3v + 1):hii_hv4],
+        hv4_vo1[:, (hii_v3v + 1):(hii_hv4 + 1)],
         pts_ho[:, [pii[0]]],
         # Next, outer from this point to back to the hV4-V3-ventral point.
         outer[:, (oii[pii[0]] + 1):oii[0]]])
@@ -453,7 +461,7 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
         outer_norm[:, (uii[1] + 1):],
         # Then the hV4-VO1 boundary.
         pts_ho[:, [pii[1]]],
-        np.fliplr(hv4_vo1[:, (hii_v3v + 1):hii_vo]),
+        np.fliplr(hv4_vo1[:, (hii_v3v + 1):(hii_vo + 1)]),
         pts_ho[:, [0]],
         # Finally, the outer boundary from hV4-VO1 to VO1-VO2.
         outer[:, (oii[0] + 1):(uii[0] + oii[pii[0]] + 1)]])
