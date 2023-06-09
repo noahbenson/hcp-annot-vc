@@ -340,7 +340,7 @@ def prep_legends(load_path=None, osf_url=None):
     if load_path is None: load_path = default_load_path
     if osf_url is None: osf_url = default_osf_url
     dirname = os.path.join(load_path, 'legends')
-    if not os.path.isfile(dirname):
+    if not os.path.isdir(dirname):
         pp = ny.util.pseudo_path(osf_url)
         path = pp.local_path('annot-images', 'legends.tar.gz')
         import tarfile
