@@ -13,5 +13,6 @@ from .core import (plot_angle, plot_eccen, plot_curv, plot_hmbound,
 from .interface import (subject_ids, subject_data, ROITool,
                         imgrid_to_flatmap, flatmap_to_imgrid)
 from .analysis import (vc_plan, to_data_path, save_contours, load_contours,
-                       subject_list_1, subject_list_2, subject_list_3)
+                       subject_list_1, subject_list_2, subject_list_3,
+                       plot_vc_contours)
 from .io import (load_traces, load_paths)
