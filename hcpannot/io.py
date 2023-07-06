@@ -323,17 +323,12 @@ def calc_surface_areas(rater, sid, h, save_path,
     r['sid'] = sid
     r['hemisphere'] = h
     return r
-<<<<<<< HEAD
-def export_labels(rater, sid, save_path,
-=======
 def export_labels(raters, sid, save_path,
->>>>>>> 4178fc706947089f2dfdacdef38efe075bc4f404
                   paths=('hV4', 'VO1', 'VO2'),
                   overwrite=True,
                   mkdir=True,
                   mkdir_mode=0o775,
                   output_weights=False,
-<<<<<<< HEAD
                   output_volume=False):
     """Calculates and saves the labels for a rater, subject, and hemisphere.
 
@@ -344,16 +339,16 @@ def export_labels(raters, sid, save_path,
     
     Parameters
     ----------
+    raters : None or list of str, optional
+        Either a list of raters that are to be included in the mean contours
+        or `None` if all available raters should be included. The default is
+        `None`.
     sid : int
         The HCP subject ID of the subject whose labels should be processed.
     save_path : directory name
         The directory to which this set of traces should be saved. Labels
         themselves are saved into a directory equivalen to
         `os.path.join(save_path, rater, str(sid))`.
-    raters : None or list of str, optional
-        Either a list of raters that are to be included in the mean contours
-        or `None` if all available raters should be included. The default is
-        `None`.
     paths : iterable of str, optional
         The paths that should be labels.
     overwrite : boolean, optional
