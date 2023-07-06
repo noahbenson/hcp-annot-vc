@@ -491,3 +491,128 @@ vc_plan = pimms.plan(
     load_cortex=load_cortex,
     flatmap=calc_flatmap,
     traces=calc_traces)
+
+# Visualization ################################################################
+raw_colors = {
+    'hV4_outer': (0.5, 0,   0),
+    'hV4_VO1':   (0,   0.3, 0),
+    'VO_outer':  (0,   0.4, 0.6),
+    'VO1_VO2':   (0,   0,   0.5)}
+preproc_colors = {
+    'hV4_outer': (0.7, 0,   0),
+    'hV4_VO1':   (0,   0.5, 0),
+    'VO_outer':  (0,   0.6, 0.8),
+    'VO1_VO2':   (0,   0,   0.7),
+    'V3_ventral':(0.7, 0,   0.7),
+    'outer':     (0.7, 0.7, 0, 0)}
+ext_colors = {
+    'hV4_outer': (1,   0,   0),
+    'hV4_VO1':   (0,   0.8, 0),
+    'VO_outer':  (0,   0.9, 1),
+    'VO1_VO2':   (0,   0,   1),
+    'V3_ventral':(0.8, 0,   0.8),
+    'outer':     (0.8, 0.8, 0.8, 1)}
+boundary_colors = {
+    'hV4': (1, 0.5, 0.5),
+    'VO1': (0.5, 1, 0.5),
+    'VO2': (0.5, 0.5, 1)}
+
+def plot_vc_contours(dat, raw=None, ext=None, preproc=None,
+                     contours=None, boundaries=None,
+                     figsize=(2,2), dpi=(72*5), axes=None, 
+                     flatmap=True, lw=1, color='prf_polar_angle',
+                     mask=('prf_variance_explained', 0.05, 1)):
+    """Plots a rater's ventral ccontours on the cortical flatmap.
+
+    `plot_vc_contours(data)` plots a flatmap of the visual cortex for the
+    subject whose data is contained in the parameter `data`. This parameter must
+    be an output dictionary of the `vc_plan` plan. Contours can be drawn on the
+    flatmap by providing one or more of the optional arguments `raw`, `ext`,
+    `preproc`, `contours`, and `boundaries`. If any of these is set to `True`,
+    then that set of contours is drawn on the flatmap with a default
+    color-scheme. Alternately, if a dictionary is given, its keys must be the
+    contour names and its values must be colors.
+
+    Parameters
+    ----------
+    data : dict
+        An output dictionary from the `vc_plan` plan.
+    raw : boolean or dict, optional
+        Whether and how to plot the raw contours (i.e., the contours as drawn by
+        the raters).
+    ext : boolean or dict, optional
+        Whether and how to plot the extended raw contours.
+    preproc : boolean or dict, optional
+        Whether and how to plot the preprocessed contours.
+    contours : boolean or dict, optional
+        Whether and how to plot the processed contours.
+    boundaries : boolean or dict, optional
+        Whether and how to plot the final boundaries.
+    figsize : tuple of 2 ints, optional
+        The size of the figure to create, assuming no `axes` are given. The
+        default is `(2,2)`.
+    dpi : int, optional
+        The number of dots per inch to given the created figure. If `axes` are
+        given, then this is ignored. The default is 360.
+    axes : matplotlib axes, optional
+        The matplotlib axes on which to plot the flatmap and contours. If this
+        is `None` (the default), then a figure is created using `figsize` and
+        `dpi`.
+    flatmap : boolean, optional
+        Whether or not to draw the flatmap. The default is `True`.
+    lw : int, optional
+        The line-width to use when drawing the contours. The default is 1.
+    color : str or flatmap property, optional
+        The color to use in the flatmap plot; this option is passed directly to
+        the `ny.cortex_plot` function. The default is `'prf_polar_angle'`.
+    mask : mask-like, optional
+        The mask to use when plotting the color on the flatmap. This option is
+        passed directly to the `ny.cortex_plot` function. The default value is
+        `('prf_variance_explained', 0.05, 1)`.
+
+    Returns
+    -------
+    matplotlib.Figure
+        The figure on which the plot was made.
+    """
+    # Make the figure.
+    if axes is None:
+        (fig,ax) = plt.subplots(1,1, figsize=figsize, dpi=dpi)
+        fig.subplots_adjust(0,0,1,1,0,0)
+    else:
+        ax = axes
+        fig = ax.get_figure()
+    # Plot the flatmap.
+    if flatmap:
+        fmap = dat['flatmap']
+        ny.cortex_plot(fmap, color=color, mask=mask, axes=ax)
+    # Plot the requested lines:
+    if raw is not None:
+        if raw is True: raw = raw_colors
+        for (k,v) in dat['raw_contours'].items():
+            c = raw.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if preproc is not None:
+        if preproc is True: preproc = preproc_colors
+        for (k,v) in dat['preproc_contours'].items():
+            c = preproc.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if ext is not None:
+        if ext is True: ext = ext_colors
+        for (k,v) in dat['ext_contours'].items():
+            c = ext.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if contours is not None:
+        if contours is True: contours = ext_colors
+        for (k,v) in dat['contours'].items():
+            c = contours.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if boundaries is not None:
+        if boundaries is True: boundaries = boundary_colors
+        for (k,v) in dat['boundaries'].items():
+            c = boundaries.get(k, 'w')
+            x = np.concatenate([v[0], [v[0][0]]])
+            y = np.concatenate([v[1], [v[1][0]]])
+            ax.plot(x, y, '-', color=c, lw=lw)
+    ax.axis('off')
+    return fig
