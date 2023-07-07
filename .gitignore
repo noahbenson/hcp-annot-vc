@@ -139,3 +139,5 @@ docker/local_cache/*
 # We want to ignore the outputs of the postprocessing notebook.
 *_trace.json.gz
 *_path.json.gz
+?h_??????.mgz
+?h_??????_weights.mgz
