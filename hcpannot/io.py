@@ -5,7 +5,7 @@
 # by Noah C. Benson <nben@uw.edu>
 
 import sys, os, pimms, json
-
+from collections.abc import Mapping
 import numpy as np
 import pyrsistent as pyr
 import neuropythy as ny
@@ -323,107 +323,98 @@ def calc_surface_areas(rater, sid, h, save_path,
     r['sid'] = sid
     r['hemisphere'] = h
     return r
-def export_labels(rater, sid, save_path,
+def export_labels(raters, sid, save_path,
                   paths=('hV4', 'VO1', 'VO2'),
                   overwrite=True,
                   mkdir=True,
                   mkdir_mode=0o775,
                   output_weights=False,
-                  output_volume=False):
-    """Calculates and saves the labels for a rater, subject, and hemisphere.
+                  exit_on_finish=False):
+    """Exports the labels for the visual areas hV4, VO1, and VO2.
 
-    This function is intended to be called with `tupcall` and `mprun` functions
-    in order to process and save the labels of a single subject and hemisphere
-    in the HCP annotation project. The first argument of the function is the
-    `sid` (subject ID).
-    
+    Exports the requested labels to disk. The labels are obtained by loading the
+    paths via `load_paths` then converting them to labels.
+
     Parameters
     ----------
+    raters : str or list of str
+        The rater or raters to export the labels for.
     sid : int
-        The HCP subject ID of the subject whose labels should be processed.
+        The HCP subject ID of the subject whose contours should be processed.
     save_path : directory name
-        The directory to which this set of traces should be saved. Labels
+        The directory to which this set of traces should be saved. Traces
         themselves are saved into a directory equivalen to
-        `os.path.join(save_path, rater, str(sid))`.
-    raters : None or list of str, optional
-        Either a list of raters that are to be included in the mean contours
-        or `None` if all available raters should be included. The default is
-        `None`.
-    paths : iterable of str, optional
-        The paths that should be labels.
-    overwrite : boolean, optional
-        Whether to overwrite the files, should they exist. The default is
-        `True`.
-    output_weights : boolean, optional
-        Whether to output a weights matrix for each hemisphere. The default is
-        `False`.
-    output_volume : boolean, optional
-        Whether to output a label volume for each subject. The default is
-        `False`.
-
-    Returns
-    -------
-    list
-        A list of the files that were written during the function or that
-        already existed (assuming that `overwrite` is `False`).
+        `os.path.join(save_path, rater)`.
+    paths : str or list of str
+        Either a list of path names that are to be included in the exported
+        files or a single path name. If a dictionary is given, then the paths
+        are assumed to be already loaded.
     """
-    outputs = []
-    # First, figure out the save path and the raters.
-    save_path = os.path.expanduser(os.path.expandvars(save_path))
-    # We want to start by generating and saving the labels for the cortical
-    # surface.
-    props = []
-    for h in ['lh', 'rh']:
-        # Make sure we need to do the work!
-        path = os.path.join(save_path, rater)
-        filename = os.path.join(path, f'{h}_{sid}.mgz')
-        if not overwrite and os.path.isfile(filename):
-            props.append(filename)
-            outputs.append(filename)
-            continue
-        ps = load_paths(rater, sid, h, save_path)
-        lbls = []
-        for k in paths:
-            p = ps[k]
-            lbl = p.label
-            if np.sum(lbl) > np.sum(1 - lbl):
-                lbl = 1 - lbl
-            lbls.append(lbl)
-        lbls = np.array(lbls)
-        # Add the zero label, which is the probability of not being in a
-        # label.
-        nolbl = np.min([np.zeros(lbls.shape[1]), 1 - np.sum(lbls, axis=0)],
-                       axis=0)
-        lbls = np.concatenate([nolbl[None,:], lbls])
-        # Make the directory for outputs if need-be.
-        if mkdir and not os.path.exists(path):
-            os.mkdirs(path, mkdir_mode)
-        if output_weights:
-            overlap_flnm = os.path.join(path, f'{h}_{sid}_weights.mgz')
-            ny.save(overlap_flnm, lbls)
-            outputs.append(overlap_flnm)
-        # We don't want to label anything as part of an area if the label
-        # value is less than or equal to 0.5.
-        lbls[lbls <= 0.5] = 0
-        # Before we find the argmax, we want to include a row 0 such that
-        # any vertex not in a visual area will be given label 0.
-        lbls[0,:] = 0.25
-        # Now find the argmax; 0 indicates none of the labels.
-        lbl = np.argmax(lbls, axis=0).astype(int)
-        # Save this file out!
-        ny.save(filename, lbl)
-        outputs.append(filename)
-        # Save this for volume interpolation also.
-        props.append(lbl)
-    # Now, we also want to interpolate to the volume and save that out.
-    filename = os.path.join(path, f'{sid}.mgz')
-    if output_volume:
-        if (overwrite or not os.path.isfile(filename)):
-            props = tuple(ny.load(flnm) if isinstance(flnm, str) else flnm
-                          for flnm in props)
-            sub = ny.hcp_subject(sid)
-            template_im = ny.image_clear(sub.images['ribbon'])
-            im = sub.cortex_to_image(props, template_im, method='nearest')
-            ny.save(filename, im)
-        outputs.append(filename)
-    return outputs
+    # Iterate through the raters.
+    if isinstance(raters, str):
+        raters = [raters]
+    if isinstance(paths, str):
+        paths = (paths,)
+    for rater in raters:
+        try:
+            # We want to start by generating and saving the labels for the cortical
+            # surface.
+            props = []
+            for h in ['lh', 'rh']:
+                # Make sure we need to do the work!
+                path = os.path.join(save_path, rater)
+                filename = os.path.join(path, f'{h}_{sid}.mgz')
+                if not overwrite and os.path.isfile(filename):
+                    props.append(filename)
+                    continue
+                if isinstance(paths, Mapping):
+                    ps = paths[h]
+                else:
+                    ps = load_paths(rater, sid, h, save_path, paths=paths)
+                lbls = []
+                for k in paths:
+                    p = ps[k]
+                    lbl = p.label
+                    if np.sum(lbl) > np.sum(1 - lbl):
+                        lbl = 1 - lbl
+                    lbls.append(lbl)
+                lbls = np.array(lbls)
+                # Add the zero label, which is the probability of not being in a
+                # label.
+                nolbl = np.min([np.zeros(lbls.shape[1]), 1 - np.sum(lbls, axis=0)],
+                               axis=0)
+                lbls = np.concatenate([nolbl[None,:], lbls])
+                # Make the directory for outputs if need-be.
+                if mkdir and not os.path.exists(path):
+                    os.mkdirs(path, mkdir_mode)
+                if output_weights:
+                    overlap_flnm = os.path.join(path, f'{h}_{sid}_weights.mgz')
+                    ny.save(overlap_flnm, lbls)
+                # We don't want to label anything as part of an area if the label
+                # value is less than or equal to 0.5.
+                lbls[lbls <= 0.5] = 0
+                # Before we find the argmax, we want to include a row 0 such that
+                # any vertex not in a visual area will be given label 0.
+                lbls[0,:] = 0.25
+                # Now find the argmax; 0 indicates none of the labels.
+                lbl = np.argmax(lbls, axis=0).astype(int)
+                # Save this file out!
+                ny.save(filename, lbl)
+                # Save this for volume interpolation also.
+                props.append(lbl)
+            # Now, we also want to interpolate to the volume and save that out.
+            filename = os.path.join(path, f'{sid}.mgz')
+            if overwrite or not os.path.isfile(filename):
+                props = tuple(ny.load(flnm) if isinstance(flnm, str) else flnm
+                              for flnm in props)
+                sub = ny.hcp_subject(sid)
+                template_im = ny.image_clear(sub.images['ribbon'])
+                im = sub.cortex_to_image(props, template_im, method='nearest')
+                ny.save(filename, im)
+        except Exception as e:
+            print(f"  - Failure for rater {rater}: {e}")
+    # Exit!
+    if exit_on_finish:
+        #print(f"Exiting: {os.getpid()}: {rater} / {sid}", file=sys.stderr)
+        sys.exit(0)
+
