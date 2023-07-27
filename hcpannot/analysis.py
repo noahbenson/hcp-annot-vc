@@ -14,33 +14,35 @@ import ipywidgets as widgets
 import neuropythy as ny
 
 from .core import (image_order, op_flatmap)
-from .interface import (default_load_path, imgrid_to_flatmap, flatmap_to_imgrid,
+from .interface import (imgrid_to_flatmap, flatmap_to_imgrid,
                         default_imshape, subject_ids, subject_data)
 
 # Global Variables #############################################################
 roi_image_shape = default_imshape[0] // 2
 # Subjects
-subject_ids = np.array(subject_ids)
+subject_ids = np.array(subject_ids, dtype=int)
 # Here we have the subject lists in the order we assigned them to the
 # project's raters.
 subject_list_1 = np.array(
     [100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
-    111514, 114823, 115017, 115825, 116726, 118225, 125525, 126426,
-    128935, 130114, 130518, 131217, 132118, 145834, 146735, 157336,
-    158136, 164131, 167036, 169747, 173334, 175237, 182436, 192439,
-    198653, 201515, 203418, 214019, 221319, 318637, 320826, 346137,
-    360030, 365343, 385046, 393247, 401422, 406836, 467351, 525541,
-    573249, 581450, 627549, 644246, 671855, 690152, 732243, 783462,
-    814649, 878776, 898176, 958976])
+     111514, 114823, 115017, 115825, 116726, 118225, 125525, 126426,
+     128935, 130114, 130518, 131217, 132118, 145834, 146735, 157336,
+     158136, 164131, 167036, 169747, 173334, 175237, 182436, 192439,
+     198653, 201515, 203418, 214019, 221319, 318637, 320826, 346137,
+     360030, 365343, 385046, 393247, 401422, 406836, 467351, 525541,
+     573249, 581450, 627549, 644246, 671855, 690152, 732243, 783462,
+     814649, 878776, 898176, 958976],
+    dtype=int)
 subject_list_2 = np.array(
     [134627, 140117, 146129, 148133, 155938, 158035, 159239, 164636,
-    165436, 167440, 169040, 169343, 171633, 176542, 177140, 178647,
-    181636, 182739, 187345, 191336, 191841, 192641, 195041, 199655,
-    204521, 205220, 212419, 233326, 239136, 246133, 251833, 263436,
-    283543, 389357, 395756, 429040, 436845, 541943, 550439, 552241,
-    601127, 638049, 724446, 751550, 757764, 765864, 770352, 782561,
-    818859, 825048, 859671, 871762, 878877, 899885, 910241, 927359,
-    942658, 951457, 971160, 973770])
+     165436, 167440, 169040, 169343, 171633, 176542, 177140, 178647,
+     181636, 182739, 187345, 191336, 191841, 192641, 195041, 199655,
+     204521, 205220, 212419, 233326, 239136, 246133, 251833, 263436,
+     283543, 389357, 395756, 429040, 436845, 541943, 550439, 552241,
+     601127, 638049, 724446, 751550, 757764, 765864, 770352, 782561,
+     818859, 825048, 859671, 871762, 878877, 899885, 910241, 927359,
+     942658, 951457, 971160, 973770],
+    dtype=int)
 subject_list_3 = ~(np.isin(subject_ids, subject_list_1) |
                    np.isin(subject_ids, subject_list_2))
 subject_list_3 = np.sort(subject_ids[subject_list_3])
@@ -163,7 +165,8 @@ def save_contours(rater, sid, h, contours, save_path,
             fls[name] = fname
     return fls
 @pimms.calc('data_path', 'raw_contours')
-def calc_load_contours(rater, sid, chirality, save_path, vc_contours=vc_contours):
+def calc_load_contours(rater, sid, chirality, save_path,
+                       vc_contours=vc_contours):
     """Load the contours for a rater, subject, and hemisphere.
     
     Parameters
