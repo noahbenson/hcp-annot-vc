@@ -28,6 +28,7 @@ from hcpannot.io import export_traces
 # Make the job list.
 opts = dict(save_path=save_path, load_path=load_path, overwrite=overwrite)
 jobs = makejobs(raters, sids, hemis, [opts])
+jobs = sorted(jobs, key=lambda job: (job[1], job[2]))
 # Run this step in the processing.
 proc_traces_results = mpstep(
     export_traces, jobs, "traces", save_path,

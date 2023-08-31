@@ -27,12 +27,13 @@ nproc = hcpa_conf.opts['nproc']
 # processes the traces for the means, and finally one that processes the paths.
 from hcpannot.mp       import (makejobs, mpstep)
 from hcpannot.io       import (export_means, export_traces, export_paths)
-from hcpannot.analysis import (vc_contours_meanrater, meanrater)
+from hcpannot.analysis import meanrater
 
 opts = dict(
     save_path=save_path, load_path=load_path, overwrite=overwrite,
-    vc_contours=vc_contours_meanrater)
+    vc_contours='ventral_meanrater')
 jobs = makejobs([meanrater], sids, hemis, [opts])
+jobs = sorted(jobs, key=lambda job: (job[1], job[2]))
 proc_meantraces_results = mpstep(
     export_traces, jobs, "meantraces", save_path,
     overwrite=overwrite,
