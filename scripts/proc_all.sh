@@ -5,8 +5,7 @@
 # scripts in order.
 
 # The raters we are running over:
-RATERS=(bogengsong BrendaQiu JiyeongHa lindazelinzhao nourahboujaber
-        jennifertepan)
+RATERS=(bogengsong BrendaQiu JiyeongHa lindazelinzhao nourahboujaber jennifertepan)
 MEANRATER=mean
 # The input and output directories:
 SAVE_PATH=/data/crcns2021/results/data_branch/save
@@ -24,32 +23,14 @@ cd "$SCRIPT_DIR"/..
 [ -d ./hcpannot ] && [ -d ./scripts ] \
     || die "script must be in the hcp-annot-vc repo when run"
 
-# Perform each step in turn:
-# (1) Process the contours into traces.
-python scripts/proc_traces.py \
-    "$SAVE_PATH" "$PROC_PATH"/traces \
+# (1) Process all the individual raters.
+python scripts/proc_raters.py \
+    "$SAVE_PATH" "$PROC_PATH" \
     --raters ${RATERS[@]} "$@"
- (2) Use the traces to make mean contours.
+# (2) Process the means.
 python scripts/proc_means.py \
-    "$PROC_PATH"/traces "$PROC_PATH"/means \
+    "$PROC_PATH"/traces "$PROC_PATH" \
     --raters ${RATERS[@]} "$@"
-# (3) Process the mean contours into traces.
-python scripts/proc_meantraces.py \
-    "$PROC_PATH"/means "$PROC_PATH"/traces \
-    --raters ${RATERS[@]} "$@"
-# (4) Process the traces into paths.
-python scripts/proc_paths.py \
-    "$PROC_PATH"/traces "$PROC_PATH"/paths \
-    --raters ${RATERS[@]} $MEANRATER "$@"
-# (5) Process the paths into labels.
-python scripts/proc_labels.py \
-    "$PROC_PATH"/paths "$PROC_PATH"/labels \
-    --raters ${RATERS[@]} $MEANRATER "$@"
-# (6) Process the paths into surface areas.
-python scripts/proc_sarea.py \
-    "$PROC_PATH"/paths "$PROC_PATH"/surface_areas.csv \
-    --raters ${RATERS[@]} $MEANRATER "$@"
-
 
 # That's it!
 exit 0
