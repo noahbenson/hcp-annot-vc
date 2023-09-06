@@ -14,33 +14,35 @@ import ipywidgets as widgets
 import neuropythy as ny
 
 from .core import (image_order, op_flatmap)
-from .interface import (default_load_path, imgrid_to_flatmap, flatmap_to_imgrid,
+from .interface import (imgrid_to_flatmap, flatmap_to_imgrid,
                         default_imshape, subject_ids, subject_data)
 
 # Global Variables #############################################################
 roi_image_shape = default_imshape[0] // 2
 # Subjects
-subject_ids = np.array(subject_ids)
+subject_ids = np.array(subject_ids, dtype=int)
 # Here we have the subject lists in the order we assigned them to the
 # project's raters.
 subject_list_1 = np.array(
     [100610, 102311, 102816, 104416, 105923, 108323, 109123, 111312,
-    111514, 114823, 115017, 115825, 116726, 118225, 125525, 126426,
-    128935, 130114, 130518, 131217, 132118, 145834, 146735, 157336,
-    158136, 164131, 167036, 169747, 173334, 175237, 182436, 192439,
-    198653, 201515, 203418, 214019, 221319, 318637, 320826, 346137,
-    360030, 365343, 385046, 393247, 401422, 406836, 467351, 525541,
-    573249, 581450, 627549, 644246, 671855, 690152, 732243, 783462,
-    814649, 878776, 898176, 958976])
+     111514, 114823, 115017, 115825, 116726, 118225, 125525, 126426,
+     128935, 130114, 130518, 131217, 132118, 145834, 146735, 157336,
+     158136, 164131, 167036, 169747, 173334, 175237, 182436, 192439,
+     198653, 201515, 203418, 214019, 221319, 318637, 320826, 346137,
+     360030, 365343, 385046, 393247, 401422, 406836, 467351, 525541,
+     573249, 581450, 627549, 644246, 671855, 690152, 732243, 783462,
+     814649, 878776, 898176, 958976],
+    dtype=int)
 subject_list_2 = np.array(
     [134627, 140117, 146129, 148133, 155938, 158035, 159239, 164636,
-    165436, 167440, 169040, 169343, 171633, 176542, 177140, 178647,
-    181636, 182739, 187345, 191336, 191841, 192641, 195041, 199655,
-    204521, 205220, 212419, 233326, 239136, 246133, 251833, 263436,
-    283543, 389357, 395756, 429040, 436845, 541943, 550439, 552241,
-    601127, 638049, 724446, 751550, 757764, 765864, 770352, 782561,
-    818859, 825048, 859671, 871762, 878877, 899885, 910241, 927359,
-    942658, 951457, 971160, 973770])
+     165436, 167440, 169040, 169343, 171633, 176542, 177140, 178647,
+     181636, 182739, 187345, 191336, 191841, 192641, 195041, 199655,
+     204521, 205220, 212419, 233326, 239136, 246133, 251833, 263436,
+     283543, 389357, 395756, 429040, 436845, 541943, 550439, 552241,
+     601127, 638049, 724446, 751550, 757764, 765864, 770352, 782561,
+     818859, 825048, 859671, 871762, 878877, 899885, 910241, 927359,
+     942658, 951457, 971160, 973770],
+    dtype=int)
 subject_list_3 = ~(np.isin(subject_ids, subject_list_1) |
                    np.isin(subject_ids, subject_list_2))
 subject_list_3 = np.sort(subject_ids[subject_list_3])
@@ -50,6 +52,10 @@ vc_contours = {'hV4_VO1': '{hemisphere}.hV4_VO1.json',
                'VO1_VO2': '{hemisphere}.VO1_VO2.json',
                'hV4_outer': '{hemisphere}.hV4.json',
                'VO_outer': '{hemisphere}.VO_outer.json'}
+vc_contours_dorsal = {'V3ab_outer': '{hemisphere}.V3ab_outer.json',
+                      'V3ab_inner': '{hemisphere}.V3ab_inner.json',
+                      'IPS0_outer': '{hemisphere}.IPS0_outer.json',
+                      'LO1_outer':  '{hemisphere}.LO1_outer.json'}
 vc_contours_meanrater = {'hV4_VO1': '{hemisphere}.hV4_VO1.json',
                          'VO1_VO2': '{hemisphere}.VO1_VO2.json',
                          'outer': '{hemisphere}.outer.json'}
@@ -159,7 +165,8 @@ def save_contours(rater, sid, h, contours, save_path,
             fls[name] = fname
     return fls
 @pimms.calc('data_path', 'raw_contours')
-def calc_load_contours(rater, sid, chirality, save_path, vc_contours=vc_contours):
+def calc_load_contours(rater, sid, chirality, save_path,
+                       vc_contours=vc_contours):
     """Load the contours for a rater, subject, and hemisphere.
     
     Parameters
@@ -432,6 +439,10 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
     if len(vii) != 2:
         raise RuntimeError(f"{len(vii)} VO1-VO2 / Outer intersections for "
                            f"{rater}/{sid}/{hemisphere}")
+    # If uii is descending, then VO1-VO2 is backwards.
+    if uii[1] < uii[0]:
+        vo1_vo2 = np.fliplr(vo1_vo2)
+        (vii, uii, pts_vu) = _cross_isect(vo1_vo2, outer_norm)
     vo1_vo2_norm = np.hstack([pts_vu[:,[0]], 
                               vo1_vo2[:, (vii[0]+1):(vii[1] + 1)],
                               pts_vu[:,[1]]])
@@ -442,7 +453,7 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
     hv4_b = np.hstack([
         # First, hV4 from V3-ventral to the hV4-outer.
         pts_ho[:, [0]],
-        hv4_vo1[:, (hii_v3v + 1):hii_hv4],
+        hv4_vo1[:, (hii_v3v + 1):(hii_hv4 + 1)],
         pts_ho[:, [pii[0]]],
         # Next, outer from this point to back to the hV4-V3-ventral point.
         outer[:, (oii[pii[0]] + 1):oii[0]]])
@@ -453,7 +464,7 @@ def calc_normalized_contours(sid, hemisphere, rater, outer_sources,
         outer_norm[:, (uii[1] + 1):],
         # Then the hV4-VO1 boundary.
         pts_ho[:, [pii[1]]],
-        np.fliplr(hv4_vo1[:, (hii_v3v + 1):hii_vo]),
+        np.fliplr(hv4_vo1[:, (hii_v3v + 1):(hii_vo + 1)]),
         pts_ho[:, [0]],
         # Finally, the outer boundary from hV4-VO1 to VO1-VO2.
         outer[:, (oii[0] + 1):(uii[0] + oii[pii[0]] + 1)]])
@@ -483,3 +494,128 @@ vc_plan = pimms.plan(
     load_cortex=load_cortex,
     flatmap=calc_flatmap,
     traces=calc_traces)
+
+# Visualization ################################################################
+raw_colors = {
+    'hV4_outer': (0.5, 0,   0),
+    'hV4_VO1':   (0,   0.3, 0),
+    'VO_outer':  (0,   0.4, 0.6),
+    'VO1_VO2':   (0,   0,   0.5)}
+preproc_colors = {
+    'hV4_outer': (0.7, 0,   0),
+    'hV4_VO1':   (0,   0.5, 0),
+    'VO_outer':  (0,   0.6, 0.8),
+    'VO1_VO2':   (0,   0,   0.7),
+    'V3_ventral':(0.7, 0,   0.7),
+    'outer':     (0.7, 0.7, 0, 0)}
+ext_colors = {
+    'hV4_outer': (1,   0,   0),
+    'hV4_VO1':   (0,   0.8, 0),
+    'VO_outer':  (0,   0.9, 1),
+    'VO1_VO2':   (0,   0,   1),
+    'V3_ventral':(0.8, 0,   0.8),
+    'outer':     (0.8, 0.8, 0.8, 1)}
+boundary_colors = {
+    'hV4': (1, 0.5, 0.5),
+    'VO1': (0.5, 1, 0.5),
+    'VO2': (0.5, 0.5, 1)}
+
+def plot_vc_contours(dat, raw=None, ext=None, preproc=None,
+                     contours=None, boundaries=None,
+                     figsize=(2,2), dpi=(72*5), axes=None, 
+                     flatmap=True, lw=1, color='prf_polar_angle',
+                     mask=('prf_variance_explained', 0.05, 1)):
+    """Plots a rater's ventral ccontours on the cortical flatmap.
+
+    `plot_vc_contours(data)` plots a flatmap of the visual cortex for the
+    subject whose data is contained in the parameter `data`. This parameter must
+    be an output dictionary of the `vc_plan` plan. Contours can be drawn on the
+    flatmap by providing one or more of the optional arguments `raw`, `ext`,
+    `preproc`, `contours`, and `boundaries`. If any of these is set to `True`,
+    then that set of contours is drawn on the flatmap with a default
+    color-scheme. Alternately, if a dictionary is given, its keys must be the
+    contour names and its values must be colors.
+
+    Parameters
+    ----------
+    data : dict
+        An output dictionary from the `vc_plan` plan.
+    raw : boolean or dict, optional
+        Whether and how to plot the raw contours (i.e., the contours as drawn by
+        the raters).
+    ext : boolean or dict, optional
+        Whether and how to plot the extended raw contours.
+    preproc : boolean or dict, optional
+        Whether and how to plot the preprocessed contours.
+    contours : boolean or dict, optional
+        Whether and how to plot the processed contours.
+    boundaries : boolean or dict, optional
+        Whether and how to plot the final boundaries.
+    figsize : tuple of 2 ints, optional
+        The size of the figure to create, assuming no `axes` are given. The
+        default is `(2,2)`.
+    dpi : int, optional
+        The number of dots per inch to given the created figure. If `axes` are
+        given, then this is ignored. The default is 360.
+    axes : matplotlib axes, optional
+        The matplotlib axes on which to plot the flatmap and contours. If this
+        is `None` (the default), then a figure is created using `figsize` and
+        `dpi`.
+    flatmap : boolean, optional
+        Whether or not to draw the flatmap. The default is `True`.
+    lw : int, optional
+        The line-width to use when drawing the contours. The default is 1.
+    color : str or flatmap property, optional
+        The color to use in the flatmap plot; this option is passed directly to
+        the `ny.cortex_plot` function. The default is `'prf_polar_angle'`.
+    mask : mask-like, optional
+        The mask to use when plotting the color on the flatmap. This option is
+        passed directly to the `ny.cortex_plot` function. The default value is
+        `('prf_variance_explained', 0.05, 1)`.
+
+    Returns
+    -------
+    matplotlib.Figure
+        The figure on which the plot was made.
+    """
+    # Make the figure.
+    if axes is None:
+        (fig,ax) = plt.subplots(1,1, figsize=figsize, dpi=dpi)
+        fig.subplots_adjust(0,0,1,1,0,0)
+    else:
+        ax = axes
+        fig = ax.get_figure()
+    # Plot the flatmap.
+    if flatmap:
+        fmap = dat['flatmap']
+        ny.cortex_plot(fmap, color=color, mask=mask, axes=ax)
+    # Plot the requested lines:
+    if raw is not None:
+        if raw is True: raw = raw_colors
+        for (k,v) in dat['raw_contours'].items():
+            c = raw.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if preproc is not None:
+        if preproc is True: preproc = preproc_colors
+        for (k,v) in dat['preproc_contours'].items():
+            c = preproc.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if ext is not None:
+        if ext is True: ext = ext_colors
+        for (k,v) in dat['ext_contours'].items():
+            c = ext.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if contours is not None:
+        if contours is True: contours = ext_colors
+        for (k,v) in dat['contours'].items():
+            c = contours.get(k, 'w')
+            ax.plot(v[0], v[1], '-', color=c, lw=lw)
+    if boundaries is not None:
+        if boundaries is True: boundaries = boundary_colors
+        for (k,v) in dat['boundaries'].items():
+            c = boundaries.get(k, 'w')
+            x = np.concatenate([v[0], [v[0][0]]])
+            y = np.concatenate([v[1], [v[1][0]]])
+            ax.plot(x, y, '-', color=c, lw=lw)
+    ax.axis('off')
+    return fig
