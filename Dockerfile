@@ -31,7 +31,10 @@ RUN mkdir -p /home/$NB_USER/.jupyter
 COPY docker/jupyter_notebook_config.py /home/$NB_USER/.jupyter/
 
 # Install collapsible cell extensions...
-RUN conda install -c conda-forge jupyter_contrib_nbextensions
+# The following line is a bug workaround; they should be replaced by just
+# this line once the bug is fixed:
+# RUN conda install -c conda-forge jupyter_contrib_nbextensions
+RUN conda install -c conda-forge 'jupyter_contrib_nbextensions < 0.7' 'traitlets == 5.9.0'
 RUN jupyter contrib nbextension install --user
 RUN jupyter-nbextension enable collapsible_headings/main \
  && jupyter-nbextension enable select_keymap/main
