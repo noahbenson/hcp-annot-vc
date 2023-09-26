@@ -4,14 +4,22 @@
 # Input and output tools for the HCP visual cortex contours.
 # by Noah C. Benson <nben@uw.edu>
 
-import sys, os, pimms, json
+
+# Dependencies #################################################################
+
+import os, json
 from collections.abc import Mapping
+from pathlib import Path
+
 import numpy as np
-import pyrsistent as pyr
 import neuropythy as ny
 
-from .analysis import (vc_plan, vc_contours, vc_contours_meanrater, meanrater,
-                       all_traces, to_data_path, save_contours, load_contours)
+from .config import (
+    procdata,
+    to_data_path)
+
+
+# Utilities ####################################################################
 
 def guess_raters(path):
     """Returns a list of possible rater names in the given path.
@@ -21,450 +29,866 @@ def guess_raters(path):
         flnm for flnm in os.listdir(path)
         if not flnm.startswith('.')
         if os.path.isdir(os.path.join(path, flnm))]
-def save_traces(traces, h, data_path, overwrite=True):
-    """Saves a dictionary of traces to a particular directory.
-    
-    `save_traces(traces, h, data_path)` saves a series of files named
-    `f"{h}.{key}_trace.json.gz"`, one per key-value pair in the `traces` dict,
-    out to the `save_path`, which must be an existing directory.
-    
-    The optional parameter `overwrite` (default: `True`) can be set to `False`
-    to require that the files are not overwritten if they already exist.
+def _save_annotdata(tag, savefn, rater, sid, h, annots,
+                    save_path=None, filenames=None, default_filename=None,
+                    overwrite=True, mkdir=True, mkdir_mode=0o775,
+                    step=None):
+    """Saves a set of data for a rater, subject, and hemisphere.
+
+    The `save_annotdata` function is meant as a helper function for the more
+    specific functions `save_contours`, `save_traces`, `save_paths`, etc. It
+    requires most of the same arguments as these functions in addition to the
+    `tag` and `savefn` parameters. The `tag` is the name of the data being
+    saved (such as `"contours"`) while the `savefn` is a function that, given
+    a valid filename and the data to be saved, actually performs the save.
     """
-    fls = {}
-    for (k,tr) in traces.items():
-        flnm = os.path.join(data_path, f'{h}.{k}_trace.json.gz')
-        if overwrite or not os.path.isfile(flnm):
-            # We need to clear the mesh field for this to work properly.
-            tr = tr.copy(map_projection=tr.map_projection.copy(mesh=None))
-            flnm = ny.save(flnm, ny.util.normalize(tr.normalize()), 'json')
-        fls[k] = flnm
-    return fls
-def export_traces(rater, sid, h,
-                  save_path='.',
+    import os, neuropythy as ny
+    if step is None:
+        step = tag
+    if isinstance(filenames, str):
+        filenames = procdata(filenames, step)
+    elif filenames is None and default_filename is not None:
+        filenames = {None: default_filename}
+    elif not isinstance(filenames, Mapping):
+        raise ValueError(
+            f"save_{tag} [{rater}/{sid}/{h}] argument filenames has invalid"
+            f" type {type(filenames)} (must be str, None, or dict-like)")
+    if not isinstance(annots, Mapping):
+        raise ValueError(
+            f"save_{tag} [{rater}/{sid}/{h}] argument contours has invalid"
+            f" type {type(annots)} (must be dict-like)")
+    if overwrite not in (True, False, None):
+        raise ValueError(
+            f"save_{tag}s [{rater}/{sid}/{h}] argument overwrite must be a"
+            f" boolean value or None")
+    # Put together the directory and make sure it exists.
+    data_path = to_data_path(
+        rater, sid, save_path,
+        mkdir=mkdir,
+        mkdir_mode=mkdir_mode)
+    # Make sure the hemisphere is okay.
+    h = ny.to_hemi_str(h)
+    # Now, step through the contours, saving out the ones that have entries
+    # in the filenames dict.
+    saved_fls = {}
+    for (name, annot) in annots.items():
+        # Figure out the filename that this contour gets saved into.
+        filename_tmpl = filenames.get(name, None)
+        if filename_tmpl is None:
+            filename_tmpl = filenames.get(None, None)
+        if filename_tmpl is None:
+            raise ValueError(
+                f"save_{tag} [{rater}/{sid}/{h}] could not find filename"
+                f" template for {name}")
+        filename = filename_tmpl.format(
+            rater=rater,
+            sid=sid,
+            hemisphere=h,
+            name=name)
+        filename = data_path / filename
+        # See if we are overwriting this file or not.
+        exists = filename.exists()
+        if overwrite is False and exists:
+            raise RuntimeError(
+                f"save_{tag}s [{rater}/{sid}/{h}] filename exists and"
+                f" overwrite is False: {filename}")
+        elif overwrite is True or not exists:
+            # Actually save the file out to disk.
+            try:
+                savefn(filename, annot)
+            except Exception as e:
+                raise RuntimeError(
+                    f"save_{tag} [{rater}/{sid}/{h}] failed for {name}:"
+                    f" ({type(e)}) {e}")
+            # Add this file to the results list only if it was actually saved.
+            saved_fls[name] = filename
+    return saved_fls
+def _load_annotdata(tag, loadfn, rater, sid, h, filenames,
+                    load_path=None, missing_okay=False, step=None):
+    """Loads a set of annotation data for a rater, subject, and hemisphere.
+    
+    This function is used by the _load_contours, _load_traces, load_paths, etc.
+    functions below to standardize the loading of processing data. It requires
+    most of the same arguments as these functions in addition to the `tag` and
+    `loadfn` parameters. The `tag` is the name of the data being saved (such as
+    `"contours"`) while the `loadfn` is a function that, given a valid filename
+    and the data to be loaded, actually loads and returns the data.
+    """
+    import os, neuropythy as ny
+    if step is None:
+        step = tag
+    if isinstance(filenames, str):
+        filenames = procdata(filenames, step)
+    elif not isinstance(filenames, Mapping):
+        raise ValueError(
+            f"load_{tag} [{rater}/{sid}/{h}] argument filenames has invalid"
+            f" type {type(filenames)} (must be str or dict-like)")
+    # Put together the directory and make sure it exists.
+    data_path = to_data_path(rater, sid, load_path, mkdir=False)
+    # Make sure the hemisphere is okay.
+    h = ny.to_hemi_str(h)
+    # We need to load precisely the files in filenames:
+    annots = {}
+    for (name,filename_tmpl) in filenames.items():
+        filename = filename_tmpl.format(
+            rater=rater,
+            sid=sid,
+            hemisphere=h,
+            name=name)
+        filepath = data_path / filename
+        # Run the load function.
+        if filepath.exists():
+            try:
+                annots[name] = loadfn(filepath)
+            except Exception as e:
+                raise RuntimeError(
+                    f"load_{tag} [{rater}/{sid}/{h}] failed for {name}:"
+                    f" ({type(e)}) {e}")
+        elif not missing_okay:
+            raise FileNotFoundError(
+                f"load_{tag} [{rater}/{sid}/{h}] file not found for {name}:"
+                f" {str(filepath)}")
+    return annots
+
+
+# Contours #####################################################################
+
+def _save_contour(filepath, contour):
+    "Saves a single contour to the given filename."
+    # Check the contour coordinates.
+    from .interface import flatmap_to_imgrid
+    if ny.is_path_trace(contour):
+        coords = contour.points
+    else:
+        coords = np.asarray(contour)
+    if len(coords.shape) != 2 or coords.shape[0] != 2:
+        raise ValueError(f"shape {coords.shape} is invalid")
+    coords = flatmap_to_imgrid(coords)[0,0]
+    # In the json file, coordinates are always stored in N x 2 matrices.
+    coords = coords.T
+    # Actually save the file out to disk.
+    filepath = Path(filepath)
+    with filepath.open('wt') as fl:
+        json.dump(coords.tolist(), fl)
+    return filepath
+def _load_contour(filepath):
+    "Loads a single contour from the given filepath."
+    from .interface import imgrid_to_flatmap
+    # Read in the json file.
+    with Path(filepath).open('rt') as file:
+        contour = np.array(json.load(file))
+    # The coordinates are stored in an N x 2 matrix in the json file.
+    contour = contour.T
+    # Convert from image-grid coordinates into flatmap coordinates. 
+    return imgrid_to_flatmap(contour)
+def save_contours(rater, sid, h, contours,
+                  save_path=None, filenames=None,
+                  overwrite=True, mkdir=True, mkdir_mode=0o775):
+    """Saves a set of contours for a subject and hemisphere to a save path.
+
+    `save_contours(rater, sid, h, contours, save_path)` saves a set of contours
+    (`contours`) to the given `save_path` for the given rater, subject ID
+    (`sid`) and hemisphere (`h`). The return value is a dict whose keys are the
+    contour names and whose values are the filenames to which the contour was
+    saved.
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater into whose directory these annotationss should be
+        saved. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being saved. If
+        `None` is given, then the subject id is not included in the output
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        saved.
+    contours : dict
+        A dictionary whose keys are the names of the contours to be saved and
+        whose values are the contours themselves (which must be numpy arrays).
+    save_path : path-like or None
+        The directory into which the annotationss are to be saved. Note that
+        this directory is the base directory that is combined with the rater and
+        sid to produce an actual save directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the annotationss that are to
+        be saved and whose values are the filename templates. If this option is
+        excluded or provided the value `None`, then all of the annotations in
+        `contours` are saved and the filename template is
+        `'{hemisphere}.{name}.json'`. If `filenames` is a string, then it is
+        looked up in the `'contours'` step of the processing data using the
+        `procdata` function (e.g. if `filenames == 'ventral'` then the dict
+        `procdata('ventral', 'contours')` is used. If the filenames dict
+        contains an entry whose key is `None`, then that entry is used as a
+        catch-all for contours whose names are not explicitly listed. The
+        filename template(s) may use the `{hemisphere}`, `{sid}`, `{rater}`, and
+        `{name}` format ids.
+    overwrite : boolean or None, optional
+        Whether to overwrite files if they already exist. If `False` is given,
+        then existing annotation files are not ovewritten and an exception is
+        raised if an existing annotation file is found. If `True` is given (the
+        default) then existing files are overwritten. If `None` is given, then
+        existing annotation files are not overwritten, but no errors are raised
+        if they are found.
+    mkdir : boolean, optional
+        Whether to create the path directory if it does not exist. If `True` is
+        given (the default), then all parent directories and the requested
+        directory are created with the mode given by `mkdir_mode`. If `False` is
+        given, then no directories are created.
+    mkdir_mode : int, optional
+        The mode to be used when creating directories. The default is `0o775`.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the keys in the `filenames` parameter and
+        whose values are the paths of the files that were successfully saved.
+    """
+    return _save_annotdata(
+        'contours', _save_contour,
+        rater, sid, h, contours,
+        save_path=save_path,
+        filenames=filenames,
+        default_filename='{hemisphere}.{name}.json',
+        overwrite=overwrite,
+        mkdir=mkdir,
+        mkdir_mode=mkdir_mode)
+def load_contours(rater, sid, h, filenames,
                   load_path=None,
-                  overwrite=True,
-                  mkdir=True,
-                  mkdir_mode=0o775,
-                  vc_plan=vc_plan, 
-                  vc_contours=vc_contours):
-    """Calculates and saves the traces for a rater, subject, and hemisphere.
+                  missing_okay=False):
+    """Loads a set of contours for a subject and hemisphere from a save path.
 
-    This function is intended to be called with `tupcall` and `mprun` functions
-    in order to process and save the traces of a single rater, subject, and
-    hemisphere in the HCP annotation project. The first three arguments of the
-    function are the `rater`, the `sid` (subject ID), and `h` (hemisphere).
-    
+    `load_contours(rater, sid, h, filenames, load_path)` loads a set of contours
+    from the given `load_path` for the given rater, subject ID (`sid`) and
+    hemisphere (`h`). These contours are returned as a dict whose keys are the
+    contours names and whose values are the contour points. The contour names
+    and filenames are provided in the `filenames` argument which must be a
+    dictionary whose keys are contour names and whose values are filename
+    templates (see below).
+
     Parameters
     ----------
-    rater : str
-        The rater whose contours should be processed.
-    sid : int
-        The HCP subject ID of the subject whose contours should be processed.
-    h : 'lh' or 'rh'
-        The hemisphere that should be processed.
-    save_path : directory name
-        The directory to which this set of traces should be saved. Traces
-        themselves are saved into a directory equivalen to
-        `os.path.join(save_path, rater, str(sid))`.
-    load_path : directory name, optional
-        The directory from which traces should be loaded; if not provided, then
-        defaults to the `save_path`.
-    vc_plan : pimms calculation plan, optional
-        The plan that is to be executed on the contours. This plan must produce
-        an output value called `'traces'` that contains the traces to be saved
-        to disk. The default is `hcpannot.vc_plan`.
-    overwrite : boolean, optional
-        Whether to overwrite the files, should they exist. The default is
-        `True`.
-    vc_contours : dict
-        A dictionary whose keys are the names of the contours and whose values
-        are format strings for the filenames that store the given contours. The
-        contours correspond to those drawn by raters using the annotation tool.
-        The default is `hcpannot.analysis.vc_contours`.
-        
+    rater : str or None
+        The name of the rater from whose directory these annotationss should be
+        loaded. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being loaded. If
+        `None` is given, then the subject id is not included in the input
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        loaded.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the annotationss that are to
+        be loaded and whose values are the filename templates. If `filenames` is
+        a string, then it is looked up in the `'contours'` step of the
+        processing data using the `procdata` function (e.g. if `filenames ==
+        'ventral'` then the dict `procdata('ventral', 'contours')` is used.
+    load_path : path-like or None
+        The directory from which the annotationss are to be loaded. Note that
+        this directory is the base directory that is combined with the rater and
+        sid to produce an actual load directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    missing_okay : boolean, optional
+        Whether it is okay for some or all of the files in `filenames` to be missing.
+        If `True` then errors are not raised when a missing file is encountered and
+        instead no entry in the resulting dictionary is included. If `False` (the
+        default), then an error is raised if a file is missing.
+    """
+    return _load_annotdata(
+        'contours', _load_contour,
+        rater, sid, h, filenames,
+        load_path=load_path,
+        missing_okay=missing_okay)
+
+
+# Traces #######################################################################
+
+def _save_trace(filepath, trace):
+    "Save a single trace to a filename."
+    # We need to clear the mesh field for this to work properly.
+    mp = trace.map_projection
+    if mp is None:
+        tr = trace
+    else:
+        mp = mp.copy(mesh=None)
+        tr = trace.copy(map_projection=mp)
+    ny.save(os.fspath(filepath), ny.util.normalize(tr.normalize()), 'json')
+    return filepath
+def _load_trace(filepath, mesh=None):
+    "Loads a single trace from the given filepath."
+    trace = ny.load(os.fspath(filepath), 'json')
+    if not isinstance(trace, dict):
+        raise RuntimeError("file does not contain a json mapping")
+    mpj = trace.pop('map_projection')
+    pts = trace.pop('points')
+    if mesh is not None:
+        mpj = mpj.copy(mesh=mesh)
+    trace = ny.geometry.PathTrace(mpj, pts, **trace)
+    return trace
+def save_traces(rater, sid, h, traces,
+                save_path=None, filenames=None,
+                overwrite=True, mkdir=True, mkdir_mode=0o775):
+    """Saves a set of traces for a subject and hemisphere to a save path.
+
+    `save_traces(rater, sid, h, contours, save_path)` saves a set of contour
+    traces (`traces`) to the given `save_path` for the given rater, subject ID
+    (`sid`) and hemisphere (`h`). The return value is a dict whose keys are the
+    trace names and whose values are the filenames to which the trace was saved.
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater into whose directory the annotations should be
+        saved. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being saved. If
+        `None` is given, then the subject id is not included in the output
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        saved.
+    traces : dict
+        A dictionary whose keys are the names of the traces to be saved and
+        whose values are the traces themselves (which must be neuropythy
+        `PathTrace` objects).
+    save_path : path-like or None
+        The directory into which the annotations are to be saved. Note that this
+        directory is the base directory that is combined with the rater and
+        sid to produce an actual save directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the traces that are to be
+        saved and whose values are the filename templates. If this option is
+        excluded or provided the value `None`, then all of the traces in
+        `traces` are saved and the filename template is
+        `'{hemisphere}.{name}_trace.json.gz'`. If `filenames` is a string, then
+        it is looked up in the `'traces'` step of the processing data using the
+        `procdata` function (e.g. if `filenames == 'ventral'` then the dict
+        `procdata('ventral', 'traces')` is used. If the filenames dict contains
+        an entry whose key is `None`, then that entry is used as a catch-all for
+        traces whose names are not explicitly listed. The filename template(s)
+        may use the `{hemisphere}`, `{sid}`, `{rater}`, and `{name}` format ids.
+    overwrite : boolean or None, optional
+        Whether to overwrite files if they already exist. If `False` is given,
+        then existing files are not ovewritten and an exception is raised if an
+        existing file is found. If `True` is given (the default) then existing
+        files are overwritten. If `None` is given, then existing contour files
+        are not overwritten, but no errors are raised if they are found.
+    mkdir : boolean, optional
+        Whether to create the path directory if it does not exist. If `True` is
+        given (the default), then all parent directories and the requested
+        directory are created with the mode given by `mkdir_mode`. If `False` is
+        given, then no directories are created.
+    mkdir_mode : int, optional
+        The mode to be used when creating directories. The default is `0o775`.
+
     Returns
     -------
     dict
-        A dictionary whose keys are the contour names and whose values are the
-        filenames to which the associated trace was saved.
+        A dictionary whose keys are the keys in the `filenames` parameter and
+        whose values are the paths of the files that were successfully saved.
     """
-    if load_path is None:
-        load_path = save_path
-    dat = vc_plan(rater=rater, sid=sid, hemisphere=h,
-                  save_path=load_path,
-                  vc_contours=vc_contours)
-    h = dat['chirality']
-    data_path = to_data_path(rater, sid, save_path=save_path)
-    if not os.path.isdir(data_path) and mkdir:
-        os.makedirs(data_path, mode=mkdir_mode)
-    return save_traces(dat['traces'], h, data_path,
-                       overwrite=overwrite)
-def load_traces(rater, sid, h,
-                save_path='.',
-                traces=all_traces):
-    """Loads and returns a dict of traces, as saved by `export_traces`.
+    return _save_annotdata(
+        'traces', _save_trace,
+        rater, sid, h, traces,
+        save_path=save_path,
+        filenames=filenames,
+        default_filename='{hemisphere}.{name}_trace.json.gz',
+        overwrite=overwrite,
+        mkdir=mkdir,
+        mkdir_mode=mkdir_mode)
+def load_traces(rater, sid, h, filenames,
+                load_path=None,
+                missing_okay=False):
+    """Loads a set of traces for a subject and hemisphere from a save path.
 
-    `load_traces(rater, sid, h, save_path)` returns a dictionary whose keys are
-    the names of traces and whose values are the traces that were saved out by
-    the `export_traces(rater, sid, h, save_path)` function.
+    `load_traces(rater, sid, h, filenames, load_path)` loads a set of contours
+    from the given `load_path` for the given rater, subject ID (`sid`) and
+    hemisphere (`h`). These traces are returned as a dict whose keys are the
+    traces names and whose values are the neuropythy `PathTrace` objects. The
+    trace names and filenames are provided in the `filenames` argument which
+    must be a dictionary whose keys are trace names and whose values are
+    filename templates (see below).
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater from whose directory these annotationss should be
+        loaded. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being loaded. If
+        `None` is given, then the subject id is not included in the input
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        loaded.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the annotationss that are to
+        be loaded and whose values are the filename templates. If `filenames` is
+        a string, then it is looked up in the `'traces'` step of the
+        processing data using the `procdata` function (e.g. if `filenames ==
+        'ventral'` then the dict `procdata('ventral', 'traces')` is used.
+    load_path : path-like or None
+        The directory from which the annotationss are to be loaded. Note that
+        this directory is the base directory that is combined with the rater and
+        sid to produce an actual load directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    missing_okay : boolean, optional
+        Whether it is okay for some or all of the files in `filenames` to be missing.
+        If `True` then errors are not raised when a missing file is encountered and
+        instead no entry in the resulting dictionary is included. If `False` (the
+        default), then an error is raised if a file is missing.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the keys in the `filenames` argument and
+        whose values are the neuropythy `PathTrace` objects that were 
+        successfully loaded.
     """
-    data_path = to_data_path(rater, sid, save_path=save_path)
-    h = ny.to_hemi_str(h.split('_')[0])
-    r = {}
-    for flnm in os.listdir(data_path):
-        if not flnm.endswith('_trace.json.gz'): continue
-        (hh, k) = flnm.split('.')[:2]
-        k = k.split('_')[:-1]
-        k = '_'.join(k)
-        if hh != h or k not in traces: continue
-        tr = ny.load(os.path.join(data_path, flnm))
-        # This is a bug? #TODO
-        if isinstance(tr, dict):
-            pts = tr.pop('points')
-            if h == 'lh': pts = np.fliplr(pts)
-            mpj = tr.pop('map_projection')
-            tr = ny.geometry.PathTrace(mpj, pts, **tr)
-        r[k] = tr
-    return r
-def export_paths(rater, sid, h,
-                 save_path='.',
+    return _load_annotdata(
+        'traces', _load_trace,
+        rater, sid, h, filenames,
+        load_path=load_path,
+        missing_okay=missing_okay)
+
+
+# Paths ########################################################################
+
+def _save_path(filepath, path):
+    "Save a single path to a filename."
+    # We need to clear the mesh field for this to work properly.
+    pathdata = dict(path.addresses)
+    ny.save(os.fspath(filepath), pathdata)
+    return filepath
+def _load_path(filepath, hem):
+    "Loads a single path from the given filepath."
+    pathdata = ny.load(os.fspath(filepath))
+    faces = np.asarray(pathdata['faces'])
+    barys = np.asarray(pathdata['coordinates'])
+    addr = {'faces': faces, 'coordinates': barys}
+    return ny.geometry.Path(hem, addr)
+def save_paths(rater, sid, h, paths,
+               save_path=None, filenames=None,
+               overwrite=True, mkdir=True, mkdir_mode=0o775):
+    """Saves a set of paths for a subject and hemisphere to a save path.
+
+    `save_paths(rater, sid, h, contours, save_path)` saves a set of contour
+    paths (`paths`) to the given `save_path` for the given rater, subject ID
+    (`sid`) and hemisphere (`h`). The return value is a dict whose keys are the
+    path names and whose values are the filenames to which the path was saved.
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater into whose directory these tracess should be
+        saved. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being saved. If
+        `None` is given, then the subject id is not included in the output
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        saved.
+    paths : dict
+        A dictionary whose keys are the names of the paths to be saved and
+        whose values are the paths themselves (which must be neuropythy
+        `Path` objects).
+    save_path : path-like or None
+        The directory into which the annotations are to be saved. Note that this
+        directory is the base directory that is combined with the rater and
+        sid to produce an actual save directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the paths that are to be
+        saved and whose values are the filename templates. If this option is
+        excluded or provided the value `None`, then all of the paths in
+        `paths` are saved and the filename template is
+        `'{hemisphere}.{name}_path.json.gz'`. If `filenames` is a string, then
+        it is looked up in the `'paths'` step of the processing data using the
+        `procdata` function (e.g. if `filenames == 'ventral'` then the dict
+        `procdata('ventral', 'paths')` is used. If the filenames dict contains
+        an entry whose key is `None`, then that entry is used as a catch-all for
+        paths whose names are not explicitly listed. The filename template(s)
+        may use the `{hemisphere}`, `{sid}`, `{rater}`, and `{name}` format ids.
+    overwrite : boolean or None, optional
+        Whether to overwrite files if they already exist. If `False` is given,
+        then existing files are not ovewritten and an exception is raised if an
+        existing file is found. If `True` is given (the default) then existing
+        files are overwritten. If `None` is given, then existing contour files
+        are not overwritten, but no errors are raised if they are found.
+    mkdir : boolean, optional
+        Whether to create the path directory if it does not exist. If `True` is
+        given (the default), then all parent directories and the requested
+        directory are created with the mode given by `mkdir_mode`. If `False` is
+        given, then no directories are created.
+    mkdir_mode : int, optional
+        The mode to be used when creating directories. The default is `0o775`.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the keys in the `filenames` parameter and
+        whose values are the paths of the files that were successfully saved.
+    """
+    return _save_annotdata(
+        'paths', _save_path,
+        rater, sid, h, paths,
+        save_path=save_path,
+        filenames=filenames,
+        default_filename='{hemisphere}.{name}_path.json.gz',
+        overwrite=overwrite,
+        mkdir=mkdir,
+        mkdir_mode=mkdir_mode)
+def load_paths(rater, sid, h, filenames,
+               load_path=None,
+               cortex=None,
+               missing_okay=False):
+    """Loads a set of paths for a subject and hemisphere from a save path.
+
+    `load_paths(rater, sid, h, filenames, load_path)` loads a set of contours
+    from the given `load_path` for the given rater, subject ID (`sid`) and
+    hemisphere (`h`). These paths are returned as a dict whose keys are the
+    paths names and whose values are the neuropythy `Path` objects. The path
+    names and filenames are provided in the `filenames` argument which must be a
+    dictionary whose keys are trace names and whose values are filename
+    templates (see below).
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater from whose directory these annotationss should be
+        loaded. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being loaded. If
+        `None` is given, then the subject id is not included in the input
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        loaded.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the annotationss that are to
+        be loaded and whose values are the filename templates. If `filenames` is
+        a string, then it is looked up in the `'paths'` step of the
+        processing data using the `procdata` function (e.g. if `filenames ==
+        'ventral'` then the dict `procdata('ventral', 'paths')` is used.
+    load_path : path-like or None
+        The directory from which the annotationss are to be loaded. Note that
+        this directory is the base directory that is combined with the rater and
+        sid to produce an actual load directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    cortex : neuropythy Cortex or None, optional
+        The cortex object to attach to use to create the path object. If `None`
+        is given, then `cortex(sid, h)` function from `hcpannot.config` is used.
+    missing_okay : boolean, optional
+        Whether it is okay for some or all of the files in `filenames` to be missing.
+        If `True` then errors are not raised when a missing file is encountered and
+        instead no entry in the resulting dictionary is included. If `False` (the
+        default), then an error is raised if a file is missing.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the keys in the `filenames` argument and
+        whose values are the neuropythy `Path` objects that were successfully
+        loaded.
+    """
+    if cortex is None:
+        from .config import cortex
+        loadfn = lambda filepath: _load_path(filepath, cortex(sid, h))
+    else:
+        loadfn = lambda filepath: _load_path(filepath, cortex)
+    return _load_annotdata(
+        'paths', loadfn,
+        rater, sid, h, filenames,
+        load_path=load_path,
+        missing_okay=missing_okay)
+
+
+# Labels #######################################################################
+
+def _save_label(filepath, label):
+    "Save a single label-vector to a filename"
+    ny.save(os.fspath(filepath), label, 'mgh')
+    return filepath
+def _load_label(filepath):
+    "Loads a single label-vector from the given filepath."
+    return ny.load(os.fspath(filepath), 'mgh', to='field')
+def save_labels(rater, sid, h, labels,
+                save_path=None, filenames=None,
+                overwrite=True, mkdir=True, mkdir_mode=0o775):
+    """Saves a set of labels for a subject and hemisphere to a save path.
+
+    `save_labels(rater, sid, h, contours, save_path)` saves a set of labels
+    (`labels`) to the given `save_path` for the given rater, subject ID (`sid`)
+    and hemisphere (`h`). The return value is a dict whose keys are the label
+    names and whose values are the filenames to which the label was saved.
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater into whose directory the annotations should be
+        saved. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being saved. If
+        `None` is given, then the subject id is not included in the output
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        saved.
+    labels : dict
+        A dictionary whose keys are the names of the labels to be saved and
+        whose values are the labels themselves (which must be vectors).
+    save_path : path-like or None
+        The directory into which the annotations are to be saved. Note that this
+        directory is the base directory that is combined with the rater and
+        sid to produce an actual save directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the labels that are to be
+        saved and whose values are the filename templates. If this option is
+        excluded or provided the value `None`, then all of the labels in
+        `labels` are saved and the filename template is
+        `'{hemisphere}.{name}.mgz'`. If `filenames` is a string, then
+        it is looked up in the `'labels'` step of the processing data using the
+        `procdata` function (e.g. if `filenames == 'ventral'` then the dict
+        `procdata('ventral', 'labels')` is used. If the filenames dict contains
+        an entry whose key is `None`, then that entry is used as a catch-all for
+        labels whose names are not explicitly listed. The filename template(s)
+        may use the `{hemisphere}`, `{sid}`, `{rater}`, and `{name}` format ids.
+    overwrite : boolean or None, optional
+        Whether to overwrite files if they already exist. If `False` is given,
+        then existing files are not ovewritten and an exception is raised if an
+        existing file is found. If `True` is given (the default) then existing
+        files are overwritten. If `None` is given, then existing contour files
+        are not overwritten, but no errors are raised if they are found.
+    mkdir : boolean, optional
+        Whether to create the path directory if it does not exist. If `True` is
+        given (the default), then all parent directories and the requested
+        directory are created with the mode given by `mkdir_mode`. If `False` is
+        given, then no directories are created.
+    mkdir_mode : int, optional
+        The mode to be used when creating directories. The default is `0o775`.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the keys in the `filenames` parameter and
+        whose values are the paths of the files that were successfully saved.
+
+    """
+    return _save_annotdata(
+        'labels', _save_label,
+        rater, sid, h, labels,
+        save_path=save_path,
+        filenames=filenames,
+        default_filename='{hemisphere}.{name}.mgz',
+        overwrite=overwrite,
+        mkdir=mkdir,
+        mkdir_mode=mkdir_mode)
+def load_labels(rater, sid, h, filenames,
+                load_path=None,
+                missing_okay=False):
+    """Loads a set of labels for a subject and hemisphere from a save path.
+
+    `load_labels(rater, sid, h, filenames, load_path)` loads a set of contours
+    from the given `load_path` for the given rater, subject ID (`sid`) and
+    hemisphere (`h`). These labels are returned as a dict whose keys are the
+    labels names and whose values are the label vectors. The label names and
+    filenames are provided in the `filenames` argument which must be a
+    dictionary whose keys are label names and whose values are filename
+    templates (see below).
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater from whose directory these annotationss should be
+        loaded. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being loaded. If
+        `None` is given, then the subject id is not included in the input
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        loaded.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the annotationss that are to
+        be loaded and whose values are the filename templates. If `filenames` is
+        a string, then it is looked up in the `'labels'` step of the
+        processing data using the `procdata` function (e.g. if `filenames ==
+        'ventral'` then the dict `procdata('ventral', 'labels')` is used.
+    load_path : path-like or None
+        The directory from which the annotationss are to be loaded. Note that
+        this directory is the base directory that is combined with the rater and
+        sid to produce an actual load directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    missing_okay : boolean, optional
+        Whether it is okay for some or all of the files in `filenames` to be
+        missing.  If `True` then errors are not raised when a missing file is
+        encountered and instead no entry in the resulting dictionary is
+        included. If `False` (the default), then an error is raised if a file is
+        missing.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the keys in the `filenames` argument and
+        whose values are the label vectors that were successfully loaded.
+    """
+    return _load_annotdata(
+        'labels', _load_label,
+        rater, sid, h, filenames,
+        load_path=load_path,
+        missing_okay=missing_okay)
+
+
+# Reports ######################################################################
+
+def _save_report(filepath, report):
+    "Save a single report dictionary to a filename"
+    ny.save(os.fspath(filepath), report, 'json')
+    return filepath
+def _load_report(filepath):
+    "Loads a single report dictionary from the given filepath."
+    return ny.load(os.fspath(filepath), 'json')
+def save_reports(rater, sid, h, reports,
+                 save_path=None, filenames=None,
+                 overwrite=True, mkdir=True, mkdir_mode=0o775):
+    """Saves a set of reports for a subject and hemisphere to a save path.
+
+    `save_reports(rater, sid, h, contours, save_path)` saves a set of reports
+    (`reports`) to the given `save_path` for the given rater, subject ID (`sid`)
+    and hemisphere (`h`). The return value is a dict whose keys are the report
+    names and whose values are the filenames to which the report was saved.
+
+    Parameters
+    ----------
+    rater : str or None
+        The name of the rater into whose directory the annotations should be
+        saved. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being saved. If
+        `None` is given, then the subject id is not included in the output
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        saved.
+    reports : dict
+        A dictionary whose keys are the names of the reports to be saved and
+        whose values are the reports themselves (which must be JSON-serializable
+        objects).
+    save_path : path-like or None
+        The directory into which the annotations are to be saved. Note that this
+        directory is the base directory that is combined with the rater and
+        sid to produce an actual save directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the reports that are to be
+        saved and whose values are the filename templates. If this option is
+        excluded or provided the value `None`, then all of the reports in
+        `reports` are saved and the filename template is
+        `'{hemisphere}.{name}.mgz'`. If `filenames` is a string, then
+        it is looked up in the `'reports'` step of the processing data using the
+        `procdata` function (e.g. if `filenames == 'ventral'` then the dict
+        `procdata('ventral', 'reports')` is used. If the filenames dict contains
+        an entry whose key is `None`, then that entry is used as a catch-all for
+        reports whose names are not explicitly listed. The filename template(s)
+        may use the `{hemisphere}`, `{sid}`, `{rater}`, and `{name}` format ids.
+    overwrite : boolean or None, optional
+        Whether to overwrite files if they already exist. If `False` is given,
+        then existing files are not ovewritten and an exception is raised if an
+        existing file is found. If `True` is given (the default) then existing
+        files are overwritten. If `None` is given, then existing contour files
+        are not overwritten, but no errors are raised if they are found.
+    mkdir : boolean, optional
+        Whether to create the path directory if it does not exist. If `True` is
+        given (the default), then all parent directories and the requested
+        directory are created with the mode given by `mkdir_mode`. If `False` is
+        given, then no directories are created.
+    mkdir_mode : int, optional
+        The mode to be used when creating directories. The default is `0o775`.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the keys in the `filenames` parameter and
+        whose values are the paths of the files that were successfully saved.
+
+    """
+    return _save_annotdata(
+        'reports', _save_report,
+        rater, sid, h, reports,
+        save_path=save_path,
+        filenames=filenames,
+        default_filename='{hemisphere}.{name}_report.json',
+        overwrite=overwrite,
+        mkdir=mkdir,
+        mkdir_mode=mkdir_mode)
+def load_reports(rater, sid, h, filenames,
                  load_path=None,
-                 overwrite=True,
-                 mkdir=True,
-                 mkdir_mode=0o775):
-    """Calculates and saves the paths for a rater, subject, and hemisphere.
+                 missing_okay=False):
+    """Loads a set of reports for a subject and hemisphere from a save path.
 
-    This function is intended to be called with `tupcall` and `mprun` functions
-    in order to process and save the paths of a single rater, subject, and
-    hemisphere in the HCP annotation project. The first three arguments of the
-    function are the `rater`, the `sid` (subject ID), and `h` (hemisphere). The
-    traces must already be calculated and saved to the given `save_path` prior
-    to calling this function.
-    
+    `load_reports(rater, sid, h, filenames, load_path)` loads a set of contours
+    from the given `load_path` for the given rater, subject ID (`sid`) and
+    hemisphere (`h`). These reports are returned as a dict whose keys are the
+    reports names and whose values are the report objects. The report names and
+    filenames are provided in the `filenames` argument which must be a
+    dictionary whose keys are report names and whose values are filename
+    templates (see below).
+
+    Reports can be any JSON-serializable object.
+
     Parameters
     ----------
-    rater : str
-        The rater whose traces should be processed.
-    sid : int
-        The HCP subject ID of the subject whose traces should be processed.
-    h : 'lh' or 'rh'
-        The hemisphere that should be processed.
-    save_path : directory name, optional
-        The directory to which this set of traces should be saved. Traces
-        themselves are saved into a directory equivalen to
-        `os.path.join(save_path, rater, str(sid))`. The default is `'.'`.
-    load_path : directory name, optional
-        The directory from which traces should be loaded; if not provided, then
-        defaults to the `save_path`.
-    overwrite : boolean, optional
-        Whether to overwrite the files, should they exist. The default is
-        `True`.
-        
-    Returns
-    -------
-    dict
-        A dictionary whose keys are the contour names and whose values are the
-        filenames to which the associated path was saved.
-    """
-    if load_path is None:
-        load_path = save_path
-    trs = load_traces(rater, sid, h, save_path=load_path)
-    data_path = to_data_path(rater, sid, save_path=save_path)
-    sub = ny.data['hcp_lines'].subjects[sid]
-    hem = sub.hemis[h]
-    r = []
-    for (k,tr) in trs.items():
-        flnm = os.path.join(data_path, f'{h}.{k}_path.json.gz')
-        if not overwrite and os.path.isfile(flnm): continue
-        if not os.path.isdir(data_path) and mkdir:
-            os.makedirs(data_path, mode=mkdir_mode)
-        p = tr.to_path(hem)
-        ny.save(flnm, p.addresses)
-        r.append(flnm)
-    return r
-def load_paths(rater, sid, h, save_path='.',
-               paths=('hV4', 'VO1', 'VO2')):
-    """Loads and returns a dict of paths, as saved by `export_paths`.
-
-    `load_paths(rater, sid, h, save_path)` returns a dictionary whose keys are
-    the names of paths and whose values are the paths that were saved out by the
-    `export_paths(rater, sid, h, save_path)` function.
-    """
-    data_path = to_data_path(rater, sid, save_path=save_path)
-    sub = ny.data['hcp_lines'].subjects[sid]
-    hem = sub.hemis[h]
-    h = ny.to_hemi_str(h.split('_')[0])
-    r = {}
-    for flnm in os.listdir(data_path):
-        if not flnm.endswith('_path.json.gz'): continue
-        (hh, k) = flnm.split('.')[:2]
-        if hh != h: continue
-        k = '_'.join(k.split('_')[:-1])
-        addr = ny.load(os.path.join(data_path, flnm))
-        if k in paths:
-            # We need to make sure the addresses are closed.
-            faces = np.asarray(addr['faces'])
-            barys = np.asarray(addr['coordinates'])
-            (f0,f1) = (faces[:,0], faces[:,-1])
-            (b0,b1) = (barys[:,0], barys[:,-1])
-            if not ((f0 == f1).all() and np.isclose(b0, b1).all()):
-                faces = np.hstack([faces, f0[:,None]])
-                barys = np.hstack([barys, b0[:,None]])
-                addr = {'faces': faces, 'coordinates': barys}
-        p = ny.geometry.Path(hem, addr)
-        r[k] = p
-    return r
-def export_means(sid, h,
-                 save_path='.',
-                 load_path=None,
-                 raters=None,
-                 npoints=500,
-                 overwrite=True,
-                 mkdir=True,
-                 mkdir_mode=0o775,
-                 vc_contours=vc_contours_meanrater,
-                 meanrater=meanrater):
-    """Calculates and saves the mean contours for a subject and hemisphere.
-
-    This function is intended to be called with `tupcall` and `mprun` functions
-    in order to process and save the traces of a single subject and hemisphere
-    in the HCP annotation project. The first two arguments of the function are
-    the `sid` (subject ID) and `h` (hemisphere).
-    
-    Parameters
-    ----------
-    sid : int
-        The HCP subject ID of the subject whose contours should be processed.
-    h : 'lh' or 'rh'
-        The hemisphere that should be processed.
-    save_path : directory name, optional
-        The directory to which this set of traces should be saved. Traces
-        themselves are saved into a directory equivalen to
-        `os.path.join(save_path, rater, str(sid))`. The default is `'.'`.
-    load_path : directory name, optional
-        The directory from which traces should be loaded; if not provided, then
-        defaults to the `save_path`.
-    raters : None or list of str, optional
-        Either a list of raters that are to be included in the mean contours
-        or `None` if all available raters should be included. The default is
-        `None`.
-    npoints : int, optional
-        The number of points to divide each contour up into when averaging
-        across raters. The default is 500.
-    overwrite : boolean, optional
-        Whether to overwrite the files, should they exist. The default is
-        `True`.
-    vc_contours : dict, optional
-        A dictionary whose keys are the names of the contours and whose values
-        are format strings for the filenames that store the given contours. The
-        contours correspond to those drawn by raters using the annotation tool.
-        The default is `hcpannot.analysis.vc_contours_meanrater`.
-    meanrater : str, optional
-        The name to use for the mean rater. By default this is the value in
-        `hcpannot.analysis.meanrater`, which is `'mean'`.
+    rater : str or None
+        The name of the rater from whose directory these annotationss should be
+        loaded. If `None` is given, then a directory for the rater is not
+        included.
+    sid : str or int or None
+        The string or integer id of the subject whose data is being loaded. If
+        `None` is given, then the subject id is not included in the input
+        directory.
+    h : str
+        The hemisphere name (`'lh'` or `'rh'`) of the annotations that are being
+        loaded.
+    filenames : dict or None, optional
+        The dictionary whose keys are the names of the annotationss that are to
+        be loaded and whose values are the filename templates. If `filenames` is
+        a string, then it is looked up in the `'reports'` step of the
+        processing data using the `procdata` function (e.g. if `filenames ==
+        'ventral'` then the dict `procdata('ventral', 'reports')` is used.
+    load_path : path-like or None
+        The directory from which the annotationss are to be loaded. Note that
+        this directory is the base directory that is combined with the rater and
+        sid to produce an actual load directory. If `None`, then the current
+        working directory is used. See also `to_data_path()`.
+    missing_okay : boolean, optional
+        Whether it is okay for some or all of the files in `filenames` to be missing.
+        If `True` then errors are not raised when a missing file is encountered and
+        instead no entry in the resulting dictionary is included. If `False` (the
+        default), then an error is raised if a file is missing.
 
     Returns
     -------
     dict
-        A dictionary whose keys are the contour names and whose values are a
-        two-tuple of `(filename, raterlist)` where `filename` is the path to
-        which the associated mean contour was saved and `raterlist` is a list
-        of the raters whose contours were averaged in order to make the contour
-        that was exported.
+        A dictionary whose keys are the keys in the `filenames` argument and
+        whose values are the report objects that were successfully loaded.
     """
-    if load_path is None:
-        load_path = save_path
-    # This is where we will load and/or eventually save these contour files.
-    data_path = to_data_path(meanrater, sid, save_path=save_path)
-    # First, check if these data already exist (if we're not overwriting).
-    if not overwrite and os.path.isdir(data_path):
-        try:
-            # We use save_path here because we are checking for complete results
-            # that have already been calculated and saved.
-            cs = load_contours(meanrater, sid, h, save_path,
-                               vc_contours=vc_contours)
-            if len(cs) > len(vc_contours):
-                cs = {c:v for (c,v) in cs if c in vc_contours}
-            if all(c in cs for c in vc_contours):
-                return cs
-        except Exception:
-            pass
-    # First things first: we need to load in the traces of all raters.
-    if raters is None:
-        raters = guess_raters(load_path)
-    trs = {}
-    for rater in raters:
-        # Try loading the traces.
-        try:
-            tr = load_traces(rater, sid, h, load_path)
-        except Exception:
-            tr = ()
-        if len(tr) == 0: continue
-        # Turn these into linspaced points.
-        trs[rater] = {k: v.copy(points=v.curve.linspace(npoints))
-                      for (k,v) in tr.items()}
-    # Process these into a mean map of contours.
-    meantrs = {}
-    rcounts = {}
-    for k in vc_contours:
-        trlist = [u for u in trs.values() if k in u]
-        if len(trlist) == 0:
-            raise ValueError(f"no raters found for contour {k}")
-        meantrs[k] = np.mean([u[k].points for u in trlist], axis=0)
-        rcounts[k] = len(trlist)
-    # Save the means; this gives us back a dict of filenames.
-    res = save_contours(meanrater, sid, h, meantrs, save_path,
-                        overwrite=overwrite,
-                        vc_contours=vc_contours,
-                        mkdir=mkdir,
-                        mkdir_mode=mkdir_mode)
-    # Finally, process the results into a dict whose values are tuples
-    # of the (filename, ratercount).
-    res = {k: (v,rcounts[k]) for (k,v) in res.items()}
-    return res
-def calc_surface_areas(rater, sid, h,
-                       load_path='.',
-                       boundaries=('hV4', 'VO1', 'VO2')):
-    """Returns the surface area of each visual area as a dict.
-
-    `calc_surface_areas(rater, sid, h, save_path)` returns a dict whose keys are
-    the names of the boundary paths for the given rater, subject ID, and
-    hemisphere, and whose values are the surface areas of each boundary.
-    
-    The optional argument `boundaries` may be passed to specify that the surface
-    areas of specific boundaries be computed; the default is
-    `('hV4', 'VO1', 'VO2')`.
-    """
-    ps = load_paths(rater, sid, h, load_path)
-    hem = None
-    for k in boundaries:
-        if k not in ps:
-            raise ValueError(f"path {k} not found for {rater}/{sid}/{h}")
-        elif hem is None:
-            hem = ps[k].surface
-    # This is the surface area that is calculated by the surface_area map;
-    # i.e., paths don't know about the vertex map that uses NaNs along the
-    # medial surface, it just knows about triangle areas.
-    c = np.nansum(hem.midgray_surface.face_areas)
-    r = {k: (np.nan if p.surface_area is None else p.surface_area['midgray'])
-         for (k,p) in ps.items()
-         if k in ('hV4', 'VO1', 'VO2')}
-    # Make sure we calculated the correct internal (not external) area.
-    r = {k: (v if v < (c - v) else (c - v)) for (k,v) in r.items()}
-    # This value is the cortical surface area excluding the medial wall.
-    r['cortex'] = np.nansum(hem.prop('midgray_surface_area'))
-    # Add in the rest of the ID stuff and return.
-    r['rater'] = rater
-    r['sid'] = sid
-    r['hemisphere'] = h
-    return r
-def export_labels(raters, sid,
-                  save_path='.',
-                  load_path=None,
-                  paths=('hV4', 'VO1', 'VO2'),
-                  overwrite=True,
-                  mkdir=True,
-                  mkdir_mode=0o775,
-                  output_weights=False,
-                  output_volume=False,
-                  exit_on_finish=False):
-    """Exports the labels for the visual areas hV4, VO1, and VO2.
-
-    Exports the requested labels to disk. The labels are obtained by loading the
-    paths via `load_paths` then converting them to labels.
-
-    Parameters
-    ----------
-    raters : str or list of str
-        The rater or raters to export the labels for.
-    sid : int
-        The HCP subject ID of the subject whose contours should be processed.
-    save_path : directory name, optional
-        The directory to which this set of labels should be saved. Labels
-        themselves are saved into a directory equivalen to
-        `os.path.join(save_path, rater)`. The default is `'.'`.
-    load_path : directory name, optional
-        The directory from which traces should be loaded; if not provided, then
-        defaults to the `save_path`.
-    paths : str or list of str
-        Either a list of path names that are to be included in the exported
-        files or a single path name. If a dictionary is given, then the paths
-        are assumed to be already loaded.
-    """
-    # If load path isn't provided, we guess it.
-    if load_path is None:
-        load_path = save_path
-    # Iterate through the raters.
-    if isinstance(raters, str):
-        raters = [raters]
-    if isinstance(paths, str):
-        paths = (paths,)
-    for rater in raters:
-        try:
-            # We want to start by generating and saving the labels for the
-            # cortical surface.
-            props = []
-            for h in ['lh', 'rh']:
-                # Make sure we need to do the work!
-                path = os.path.join(save_path, rater)
-                filename = os.path.join(path, f'{h}_{sid}.mgz')
-                if not overwrite and os.path.isfile(filename):
-                    props.append(filename)
-                    continue
-                if isinstance(paths, Mapping):
-                    ps = paths[h]
-                else:
-                    ps = load_paths(rater, sid, h, load_path, paths=paths)
-                lbls = []
-                for k in paths:
-                    p = ps[k]
-                    lbl = p.label
-                    if np.sum(lbl) > np.sum(1 - lbl):
-                        lbl = 1 - lbl
-                    lbls.append(lbl)
-                lbls = np.array(lbls)
-                # Add the zero label, which is the probability of not being in a
-                # label.
-                nolbl = np.min(
-                    [np.zeros(lbls.shape[1]), 1 - np.sum(lbls, axis=0)],
-                    axis=0)
-                lbls = np.concatenate([nolbl[None,:], lbls])
-                # Make the directory for outputs if need-be.
-                if mkdir and not os.path.exists(path):
-                    os.mkdirs(path, mkdir_mode)
-                if output_weights:
-                    overlap_flnm = os.path.join(path, f'{h}_{sid}_weights.mgz')
-                    ny.save(overlap_flnm, lbls)
-                # We don't want to label anything as part of an area if the
-                # label value is less than or equal to 0.5.
-                lbls[lbls <= 0.5] = 0
-                # Before we find the argmax, we want to include a row 0 such
-                # that any vertex not in a visual area will be given label 0.
-                lbls[0,:] = 0.25
-                # Now find the argmax; 0 indicates none of the labels.
-                lbl = np.argmax(lbls, axis=0).astype(int)
-                # Save this file out!
-                ny.save(filename, lbl)
-                # Save this for volume interpolation also.
-                props.append(lbl)
-            # Now, we also want to interpolate to the volume and save that out.
-            if output_volume:
-                filename = os.path.join(path, f'{sid}.mgz')
-                if overwrite or not os.path.isfile(filename):
-                    props = tuple(
-                        ny.load(flnm) if isinstance(flnm, str) else flnm
-                        for flnm in props)
-                    sub = ny.hcp_subject(sid)
-                    template_im = ny.image_clear(sub.images['ribbon'])
-                    im = sub.cortex_to_image(
-                        props, template_im,
-                        method='nearest')
-                    ny.save(filename, im)
-        except Exception as e:
-            print(f"  - Failure for rater {rater}: {e}")
-    # Exit!
-    if exit_on_finish:
-        #print(f"Exiting: {os.getpid()}: {rater} / {sid}", file=sys.stderr)
-        sys.exit(0)
-
+    return _load_annotdata(
+        'reports', _load_report,
+        rater, sid, h, filenames,
+        load_path=load_path,
+        missing_okay=missing_okay)
