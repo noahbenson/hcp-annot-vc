@@ -131,8 +131,9 @@ class Config:
             if len(args.raters) == 1 and args.raters[0] in default_raters:
                 args.raters = default_raters[args.raters[0]]
             if args.sids is None:
-                from hcpannot import subject_ids
-            args.sids = np.array(subject_ids, dtype=int)
+                from hcpannot import subject_list
+                args.sids = subject_list
+            args.sids = np.array(args.sids, dtype=int)
             if args.nproc is None or args.nproc == 0:
                 args.nproc = cpu_count()
             elif args.nproc < 0:
