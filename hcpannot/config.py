@@ -136,6 +136,8 @@ contours_dorsal = {
 traces_ventral = {
     'hV4_VO1': '{hemisphere}.hV4_VO1_trace.json.gz',
     'VO1_VO2': '{hemisphere}.VO1_VO2_trace.json.gz',
+    'hV4_outer': '{hemisphere}.hV4_outer_trace.json.gz',
+    'VO_outer': '{hemisphere}.VO_outer_trace.json.gz',
     'outer': '{hemisphere}.outer_trace.json.gz',
     'hV4': '{hemisphere}.hV4_trace.json.gz',
     'VO1': '{hemisphere}.VO1_trace.json.gz',
@@ -151,7 +153,9 @@ paths_ventral = dict(
     boundaries_ventral,
     hV4_VO1='{hemisphere}.hV4_VO1_path.json.gz',
     VO1_VO2='{hemisphere}.VO1_VO2_path.json.gz',
-    outer='{hemisphere}.outer_path.json.gz')
+    outer='{hemisphere}.outer_path.json.gz',
+    hV4_outer='{hemisphere}.hV4_outer_path.json.gz',
+    VO_outer='{hemisphere}.VO_outer_path.json.gz')
 
 # Labels -----------------------------------------------------------------------
 labels_ventral = {
@@ -170,11 +174,13 @@ reports_ventral = {
 meansources_ventral = {
     'hV4_VO1': '{hemisphere}.hV4_VO1_trace.json.gz',
     'VO1_VO2': '{hemisphere}.VO1_VO2_trace.json.gz',
-    'outer': '{hemisphere}.outer_trace.json.gz'}
+    'hV4_outer': '{hemisphere}.hV4_outer_trace.json.gz',
+    'VO_outer': '{hemisphere}.VO_outer_trace.json.gz'}
 meancontours_ventral = {
     'hV4_VO1': '{hemisphere}.hV4_VO1.json',
     'VO1_VO2': '{hemisphere}.VO1_VO2.json',
-    'outer': '{hemisphere}.outer.json'}
+    'hV4_outer': '{hemisphere}.hV4_outer.json',
+    'VO_outer': '{hemisphere}.VO_outer.json'}
 meantraces_ventral = dict(traces_ventral)
 meanboundaries_ventral = dict(boundaries_ventral)
 meanpaths_ventral = dict(paths_ventral)
