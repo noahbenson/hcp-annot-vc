@@ -83,8 +83,9 @@ RUN LPP="`python -c 'import site; print(site.getusersitepackages())'`" \
 
 USER root
 RUN chown -R $NB_USER /home/$NB_USER/.ipython && chmod 700 /home/$NB_USER/.ipython
+RUN apt-get install --yes netbase inetutils-ping
 USER $NB_USER
 
 # And mark it as the entrypoint
 ENTRYPOINT ["tini", "-g", "--", "/usr/local/bin/start-notebook.sh"]
-
+#ENTRYPOINT ["/bin/sh"]
