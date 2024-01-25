@@ -17,7 +17,7 @@ hcpannot.interface.default_load_path = hcpa_conf.opts['cache_path']
 
 raters = hcpa_conf.raters
 if raters is None:
-    raters = hcpa_cmd.default_raters['ventral']
+    raters = hcpa_cmd.default_raters[region]
 sids = hcpa_conf.sids
 hemis = hcpa_conf.hemis
 opts = hcpa_conf.opts
@@ -27,7 +27,9 @@ overwrite = hcpa_conf.opts['overwrite']
 if overwrite is False:
     overwrite = None
 nproc = hcpa_conf.opts['nproc']
-
+region = hcpa_conf.region
+if region not in ('ventral', 'dorsal'):
+    raise ValueError(f"region must be ventral or dorsal; got {region}")
 
 # Running the Jobs #############################################################
 
@@ -38,18 +40,18 @@ opts = dict(
     overwrite=overwrite,
     source_raters=raters)
 def call_proc_all(sid, h):
-    return meanproc_all('ventral', sid=sid, hemisphere=h, **opts)
+    return meanproc_all(region, sid=sid, hemisphere=h, **opts)
 def firstarg(a, b):
     return a
 jobs = makejobs(sids, hemis)
 # Run this step in the processing.
 dfs = proc_traces_results = mprun(
-    call_proc_all, jobs, "meanventral",
+    call_proc_all, jobs, f"mean{region}",
     nproc=nproc,
     onfail=firstarg,
     onokay=firstarg)
 df = pd.concat(dfs)
 df.to_csv(
-    os.path.join(save_path, 'proc_meanventral.tsv'),
+    os.path.join(save_path, f'proc_mean{region}.tsv'),
     sep='\t',
     index=False)
