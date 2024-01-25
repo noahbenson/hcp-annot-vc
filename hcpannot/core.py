@@ -66,6 +66,17 @@ def op_flatmap(hem, **kw):
     for (k,v) in kw.items():
         opts[k] = v
     return hem.mask_flatmap(('Destrieux09_parcellation', 43), **opts)
+def nestget(d, k):
+    """Retrieves nested data from the proc dictionaries.
+    
+    Certain keys such as `'boundaries'` are accessible in the dictionaries that
+    are returned by the `proc` function only via the `'nested_data'` key, which
+    typically contains another proc dictionary with additional data. The
+    `nestget` function gets data from these embedded dictionaries.
+    """
+    while k not in d:
+        d = d['nested_data']
+    return d[k]
 
 # Plot Figures #################################################################
 def plot_isoecc(fmap, ecc0, scale=1, log=True, cmap='highlight', axes=None,

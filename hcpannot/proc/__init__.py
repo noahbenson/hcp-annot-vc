@@ -6,10 +6,13 @@
 
 from .core    import init_plan
 from .ventral import ventral_contours_plan, ventral_contours_meanplan
+from .dorsal  import dorsal_contours_plan, dorsal_contours_meanplan
 
 contours_plans = {
     'ventral': ventral_contours_plan,
-    'meanventral': ventral_contours_meanplan}
+    'meanventral': ventral_contours_meanplan,
+    'dorsal': dorsal_contours_plan,
+    'meandorsal': dorsal_contours_meanplan}
 
 def proc(contours_plan, **kw):
     """Returns a visual cortex processing plan dict based on the given subplan.

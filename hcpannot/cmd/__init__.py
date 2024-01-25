@@ -28,7 +28,7 @@ default_raters = {
         'BrendaQiu',
         'oadesiyan',
         'mominbashir',
-        'sc5992',
+        #'sc5992',
         'qiutan6li',
         'mean']}
 
@@ -61,6 +61,9 @@ class Config:
         '_parsed_args')
     @classmethod
     def build_parser(cls, parser):
+        parser.add_argument(
+            'region',
+            choices=['ventral', 'dorsal'])
         parser.add_argument(
             '-c', '--cache-path',
             default=None,
@@ -145,6 +148,9 @@ class Config:
                 cache_path=args.cache_path,
                 nproc=args.nproc)
         return self._parsed_args
+    @property
+    def region(self):
+        return self.parsed_args().region
     @property
     def raters(self):
         return self.parsed_args().raters

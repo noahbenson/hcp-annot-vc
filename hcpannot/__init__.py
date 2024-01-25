@@ -12,7 +12,7 @@ from .config import (
     procdata)
 from .core import (
     plot_angle, plot_eccen, plot_curv, plot_hmbound,
-    plot_vmbound, plot_as_image, op_flatmap, plot_isoang,
+    plot_vmbound, plot_as_image, op_flatmap, nestget, plot_isoang,
     plot_isoecc, generate_images, label_to_segs)
 from .interface import (
     subject_data, ROITool,

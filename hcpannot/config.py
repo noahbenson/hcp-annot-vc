@@ -107,11 +107,11 @@ ventral_raters = [
     'jennifertepan']
 dorsal_raters = [
     'Annie-lsc',
-    'mominbashir',
-    'oadesiyan',
-    'qiutan6li',
     'BrendaQiu',
-    'sc5992']
+    'mominbashir',
+    #'oadesiyan',
+    #'sc5992',
+    'qiutan6li']
 raters_by_region = {
     'ventral': ventral_raters,
     'dorsal': dorsal_raters,
@@ -142,6 +142,15 @@ traces_ventral = {
     'hV4': '{hemisphere}.hV4_trace.json.gz',
     'VO1': '{hemisphere}.VO1_trace.json.gz',
     'VO2': '{hemisphere}.VO2_trace.json.gz'}
+traces_dorsal = {
+    'V3ab_outer': '{hemisphere}.V3ab_outer_trace.json.gz',
+    'V3ab_inner': '{hemisphere}.V3ab_inner_trace.json.gz',
+    'IPS0_outer': '{hemisphere}.IPS0_outer_trace.json.gz',
+    'LO1_outer': '{hemisphere}.LO1_outer_trace.json.gz',
+    'V3a': '{hemisphere}.V3a_trace.json.gz',
+    'V3b': '{hemisphere}.V3b_trace.json.gz',
+    'IPS0': '{hemisphere}.IPS0_trace.json.gz',
+    'LO1': '{hemisphere}.LO1_trace.json.gz'}
 
 # Paths and Boundaries ---------------------------------------------------------
 # And the important paths (which include boundaries).
@@ -149,6 +158,11 @@ boundaries_ventral = {
     'hV4': '{hemisphere}.hV4_path.json.gz',
     'VO1': '{hemisphere}.VO1_path.json.gz',
     'VO2': '{hemisphere}.VO2_path.json.gz'}
+boundaries_dorsal = {
+    'V3a': '{hemisphere}.V3a_path.json.gz',
+    'V3b': '{hemisphere}.V3b_path.json.gz',
+    'IPS0': '{hemisphere}.IPS0_path.json.gz',
+    'LO1': '{hemisphere}.LO1_path.json.gz'}
 paths_ventral = dict(
     boundaries_ventral,
     hV4_VO1='{hemisphere}.hV4_VO1_path.json.gz',
@@ -156,15 +170,26 @@ paths_ventral = dict(
     outer='{hemisphere}.outer_path.json.gz',
     hV4_outer='{hemisphere}.hV4_outer_path.json.gz',
     VO_outer='{hemisphere}.VO_outer_path.json.gz')
+paths_dorsal = dict(
+    boundaries_dorsal,
+    V3ab_outer='{hemisphere}.V3ab_outer_path.json.gz',
+    V3ab_inner='{hemisphere}.V3ab_inner_path.json.gz',
+    IPS0_outer='{hemisphere}.IPS0_outer_path.json.gz',
+    LO1_outer='{hemisphere}.LO1_outer_path.json.gz')
 
 # Labels -----------------------------------------------------------------------
 labels_ventral = {
     'labels': '{hemisphere}.ventral_label.mgz',
     'weights': '{hemisphere}.ventral_weight.mgz'}
+labels_dorsal = {
+    'labels': '{hemisphere}.dorsal_label.mgz',
+    'weights': '{hemisphere}.dorsal_weight.mgz'}
 
 # Reports ----------------------------------------------------------------------
 reports_ventral = {
     'surface_area': '{hemisphere}.ventral_sareas.json'}
+reports_dorsal = {
+    'surface_area': '{hemisphere}.dorsal_sareas.json'}
 
 # Means ------------------------------------------------------------------------
 # When we create the mean contours, we operate on the processed traces of the
@@ -184,6 +209,19 @@ meancontours_ventral = {
 meantraces_ventral = dict(traces_ventral)
 meanboundaries_ventral = dict(boundaries_ventral)
 meanpaths_ventral = dict(paths_ventral)
+meansources_dorsal = {
+    'V3ab_outer': '{hemisphere}.V3ab_outer_trace.json.gz',
+    'V3ab_inner': '{hemisphere}.V3ab_inner_trace.json.gz',
+    'IPS0_outer': '{hemisphere}.IPS0_outer_trace.json.gz',
+    'LO1_outer': '{hemisphere}.LO1_outer_trace.json.gz'}
+meancontours_dorsal = {
+    'V3ab_outer': '{hemisphere}.V3ab_outer.json',
+    'V3ab_inner': '{hemisphere}.V3ab_inner.json',
+    'IPS0_outer': '{hemisphere}.IPS0_outer.json',
+    'LO1_outer':  '{hemisphere}.LO1_outer.json'}
+meantraces_dorsal = dict(traces_dorsal)
+meanboundaries_dorsal = dict(boundaries_dorsal)
+meanpaths_dorsal = dict(paths_dorsal)
 
 # Processing Data by Group -----------------------------------------------------
 # Mean items 
@@ -191,25 +229,35 @@ contours_by_region = {
     'ventral': contours_ventral,
     'dorsal': contours_dorsal}
 traces_by_region = {
-    'ventral': traces_ventral}
+    'ventral': traces_ventral,
+    'dorsal': traces_dorsal}
 boundaries_by_region = {
-    'ventral': boundaries_ventral}
+    'ventral': boundaries_ventral,
+    'dorsal': boundaries_dorsal}
 paths_by_region = {
-    'ventral': paths_ventral}
+    'ventral': paths_ventral,
+    'dorsal': paths_dorsal}
 labels_by_region = {
-    'ventral': labels_ventral}
+    'ventral': labels_ventral,
+    'dorsal': labels_dorsal}
 reports_by_region = {
-    'ventral': reports_ventral}
+    'ventral': reports_ventral,
+    'dorsal': reports_dorsal}
 meansources_by_region = {
-    'ventral': meansources_ventral}
+    'ventral': meansources_ventral,
+    'dorsal': meansources_dorsal}
 meancontours_by_region = {
-    'ventral': meancontours_ventral}
+    'ventral': meancontours_ventral,
+    'dorsal': meancontours_dorsal}
 meantraces_by_region = {
-    'ventral': meantraces_ventral}
+    'ventral': meantraces_ventral,
+    'dorsal': meantraces_dorsal}
 meanboundaries_by_region = {
-    'ventral': meanboundaries_ventral}
+    'ventral': meanboundaries_ventral,
+    'dorsal': meanboundaries_dorsal}
 meanpaths_by_region = {
-    'ventral': meanpaths_ventral}
+    'ventral': meanpaths_ventral,
+    'dorsal': meanpaths_dorsal}
 region_procdata = {
     k: {
         'raters':     raters_by_region.get(k),

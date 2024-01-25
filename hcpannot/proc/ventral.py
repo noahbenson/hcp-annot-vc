@@ -33,6 +33,15 @@ from ..io import (
 from .core import (
     init_plan,
     init_meanplan)
+from .util import (
+    cross_isect_2D,
+    iscloser,
+    fix_polygon,
+    contour_endangle,
+    order_nearness,
+    dedup_points,
+    find_crossings,
+    extend_contour)
 
 
 # Ventral Processing ###########################################################
@@ -60,21 +69,6 @@ def load_v3v_contour(sid, chirality):
     v3v = np.array(v3v)
     # This is the v3-ventral contour.
     return (v3v,)
-def _extend_contour(pts, d=100):
-    u = next(
-        (d for ii in range(pts.shape[1] - 1)
-         for d in [pts[:,ii] - pts[:,ii+1]]
-         if np.sum(d**2) != 0))
-    v = next(
-        (d for ii in range(pts.shape[1] - 1, 0, -1)
-         for d in [pts[:,ii] - pts[:,ii-1]]
-         if np.sum(d**2) != 0))
-    #(u, v) = (pts[:,0] - pts[:,1], pts[:,-1] - pts[:,-2])
-    u /= np.sqrt(np.sum(u**2))
-    v /= np.sqrt(np.sum(v**2))
-    pts_ext = [(u*d + pts[:,0])[:,None], pts, (v*d + pts[:,-1])[:,None]]
-    pts_ext = np.hstack(pts_ext)
-    return pts_ext
 @pimms.calc('preproc_contours', 'ext_contours', 'outer_sources')
 def calc_extended_contours(rater, contours, chirality, v3v_contour):
     """Creates and extended hV4/VO1 boundary contour.
@@ -118,99 +112,22 @@ def calc_extended_contours(rater, contours, chirality, v3v_contour):
     contours['V3v'] = np.fliplr(v3v_contour)
     contours['outer'] = outbound
     # Now make the extended contours:
-    ext_contours = {k:_extend_contour(c) for (k,c) in contours.items()}
+    ext_contours = {k:extend_contour(c) for (k,c) in contours.items()}
     # And return!
     return (contours, ext_contours, outer_sources)
-def _cross_isect(segs1, segs2, rtol=1e-05, atol=1e-08):
-    from neuropythy.geometry.util import segment_intersection_2D
-    (segs1, segs2) = (np.asarray(segs1), np.asarray(segs2))
-    (n1, n2) = (segs1.shape[1] - 1, segs2.shape[1] - 1)
-    ii1 = np.concatenate([[k]*n2 for k in range(n1)])
-    ii2 = np.arange(n2)
-    ii2 = np.concatenate([ii2]*n1)
-    pts = segment_intersection_2D([segs1[...,ii1], segs1[...,ii1+1]],
-                                  [segs2[...,ii2], segs2[...,ii2+1]],
-                                  inclusive=True)
-    pts = np.asarray(pts)
-    ii = np.all(np.isfinite(pts), axis=0)
-    (ii1, ii2, pts) = (ii1[ii], ii2[ii], pts[:,ii])
-    # We have to be careful with sorting: if two of the ii1 segments are
-    # the same, we want to order them by the distance from the segment
-    # start.
-    seglen2s = np.sum((segs1[:, :-1] - segs1[:, 1:])**2, axis=0)
-    ds = [
-        np.sum(seglen2s[:ii1[ii]]) + np.sum((segs1[:, ii1[ii]] - pts[:,ii])**2)
-        for ii in range(len(ii1))]
-    ii = np.argsort(ds)
-    (ii1, ii2, pts) = (ii1[ii], ii2[ii], pts[:,ii])
-    # See if we have accidentally created identical points.
-    for ii in reversed(range(pts.shape[1] - 1)):
-        if np.isclose(pts[:,ii], pts[:,ii+1], atol=atol, rtol=rtol).all():
-            ii1 = np.delete(ii1, ii+1)
-            ii2 = np.delete(ii2, ii+1)
-            pts = np.delete(pts, ii+1, axis=-1)
-    return (ii1, ii2, pts)
-def _closer(x, a, b):
-    da2 = np.sum((x - a)**2)
-    db2 = np.sum((x - b)**2)
-    return (da2 < db2)
-def _fix_polygon(poly):
-    # First, remove duplicate adjacent points.
-    iidup = np.all(np.isclose(poly, np.roll(poly, -1, axis=1)), axis=0)
-    iidup[-1] = False
-    poly = poly[:, ~iidup]
-    if not np.all(np.isclose(poly[:,0], poly[:,-1])):
-        poly = np.hstack([poly, poly[:,[0]]])
-    # If the polygon self-intersects, we really have two polygons and we just
-    # want the largest of these.
-    (ii1, ii2, pts) = _cross_isect(poly, poly)
-    n = poly.shape[1]
-    # Find where the intersections aren't with the neighboring segments.
-    delta = np.mod(ii1 - ii2 + n//2, n-1) - n//2
-    ii = np.where(np.abs(delta) > 1)[0]
-    # If there are none of these, no problem!
-    if len(ii) == 0:
-        return poly
-    elif len(ii) != 2:
-        raise ValueError(f"{len(ii)} self-intersections in polygon")
-    # We find which of the two polygons is the biggest (longest perimeter).
-    # First split them into the two polygons.
-    (ii1, ii2) = sorted(ii1[ii])
-    pt = pts[:,ii[0]]
-    poly1 = np.hstack([pt[:,None], poly[:, ii1+1:ii2], pt[:,None]])
-    poly2 = np.hstack([pt[:,None], poly[:, ii2+1:], poly[:, :ii1], pt[:,None]])
-    # Which has the larger perimeter?
-    per1 = np.sum(np.sqrt(np.sum((poly1 - np.roll(poly1, -1, axis=1))**2, 0)))
-    per2 = np.sum(np.sqrt(np.sum((poly2 - np.roll(poly2, -1, axis=1))**2, 0)))
-    if per1 < per2:
-        return poly2
-    else:
-        return poly1
-def _endchange(pts, v):
-    u = pts[:, -1] - pts[:, -2]
-    v = v - pts[:, -1]
-    return u.dot(v)
-def _order_by_nearness(pts, startpt):
-    ends = pts[:,[0,-1]].T
-    dists = [np.sqrt(np.sum((end - startpt)**2)) for end in ends]
-    return np.fliplr(pts) if dists[1] < dists[0] else pts
-def _dedup_points(pts):
-    iidup = np.all(np.isclose(pts, np.roll(pts, -1, axis=1)), axis=0)
-    iidup[-1] = False
-    return pts[:, ~iidup]
 def _proc_outers(hv4_outer, vo_outer, v3v_contour):
     # Both the hV4-VO1 contour need to be re-ordered to be starting near
     # the V3-ventral contour and ending far from it. We can also remove
     # duplicate points while we're at it.
-    hv4_outer = _order_by_nearness(_dedup_points(hv4_outer), v3v_contour[:,-1])
-    vo_outer = _order_by_nearness(_dedup_points(vo_outer), v3v_contour[:,0])
+    hv4_outer = order_nearness(dedup_points(hv4_outer), v3v_contour[:,-1])
+    vo_outer = order_nearness(dedup_points(vo_outer), v3v_contour[:,0])
     # If the two contours have 1 intersection, that is their new endpoint.
-    (hii, vii, pts) = _cross_isect(hv4_outer, vo_outer)
+    (hii, vii, pts) = cross_isect_2D(hv4_outer, vo_outer)
     while len(hii) > 1:
         # Trim one point off of each end and try again.
         hv4_outer = hv4_outer[:,:-1]
         vo_outer = vo_outer[:,:-1]
-        (hii, vii, pts) = _cross_isect(hv4_outer, vo_outer)
+        (hii, vii, pts) = cross_isect_2D(hv4_outer, vo_outer)
     if len(hii) == 1:
         # This is their new endpoint.
         hv4_outer = np.hstack([hv4_outer[:, :hii[0]+1], pts])
@@ -218,7 +135,7 @@ def _proc_outers(hv4_outer, vo_outer, v3v_contour):
     else:
         # Check whether the vector from end to end is pointing in the wrong
         # direction---if so, we need to cut ends off.
-        while _endchange(hv4_outer, vo_outer[:,-1]) < 0:
+        while contour_endangle(hv4_outer, vo_outer[:,-1]) < 0:
             hv4_outer = hv4_outer[:,:-1]
             vo_outer = vo_outer[:,:-1]
         u = 0.5*(hv4_outer[:,-1] + vo_outer[:,-1])
@@ -246,20 +163,10 @@ def calc_normalized_contours(sid, hemisphere, chirality, rater, outer_sources,
     if chirality == 'lh':
         # Make the boundaries counter-clockwise.
         bounds = {k: np.fliplr(v) for (k,v) in bounds.items()}
-    bounds = {k: _fix_polygon(b) for (k,b) in bounds.items()}
+    bounds = {k: fix_polygon(b) for (k,b) in bounds.items()}
     contours['hV4_outer'] = preproc_contours['hV4_outer']
     contours['VO_outer'] = preproc_contours['VO_outer']
     return (contours, bounds)
-def _find_crossings(crosser, outer):
-    (cii, oii, pts) = _cross_isect(crosser, outer)
-    if len(cii) > 2:
-        # We can probably cut this down to 2 by keeping the two
-        # intersections that corner off the largest stretch of the crossing
-        # contour.
-        mx = np.argmax(np.diff(cii))
-        ii = [mx, mx+1]
-        (cii, oii, pts) = (cii[ii], oii[ii], pts[:, ii])
-    return (cii, oii, pts)    
 def _calc_normcontours_simple(hv4_vo1, vo1_vo2, outer, chirality):
     # The extended vo1/vo2 and hv4/vo contours should each intersect this outer
     # boundary twice. We subdivide the outer boundary into top and bottom pieces
@@ -271,14 +178,14 @@ def _calc_normcontours_simple(hv4_vo1, vo1_vo2, outer, chirality):
     for name in ('hV4-VO1', 'VO1-VO2'):
         cross = crossings[name]
         # First, make sure that cross is pointing in the right direction.
-        (cii, oii, pts) = _find_crossings(cross, outer)
+        (cii, oii, pts) = find_crossings(cross, outer)
         if len(cii) != 2:
             raise RuntimeError(
                 f"{len(cii)} {name} / Outer intersections")
         if oii[0] > oii[1]:
             cross = np.fliplr(cross)
         # Next, find the crossings with the actual working outer boundary.
-        (cii, oii, pts) = _find_crossings(cross, outer_work)
+        (cii, oii, pts) = find_crossings(cross, outer_work)
         if len(cii) != 2:
             raise RuntimeError(
                 f"{len(cii)} {name} / Working-Outer intersections")
@@ -287,7 +194,7 @@ def _calc_normcontours_simple(hv4_vo1, vo1_vo2, outer, chirality):
         # columns of the matrix.
         outer_work = np.roll(outer_work[:,:-1], -oii[0] - 1, axis=1)
         outer_work = np.hstack([outer_work, outer_work[:,[0]]])
-        (cii, oii, pts) = _find_crossings(cross, outer_work)
+        (cii, oii, pts) = find_crossings(cross, outer_work)
         # Now build the pieces.
         cross = np.hstack(
             [pts[:, [0]], cross[:, cii[0]+1:cii[1]+1], pts[:,[1]]])
@@ -309,7 +216,7 @@ def _calc_normcontours_simple(hv4_vo1, vo1_vo2, outer, chirality):
 def _calc_normcontours_complex(hv4_vo1, vo1_vo2, outer, outer_sources):
     # We want to find the intersections between hV4-VO1 and the outer boundary.
     # There must be 3; any other number is an error.
-    (hii, oii, pts_ho) = _cross_isect(hv4_vo1, outer)
+    (hii, oii, pts_ho) = cross_isect_2D(hv4_vo1, outer)
     if len(hii) > 3:
         # We need to figure out which three intersections of the hV4-VO1 border
         # and the outer border we're going to use.
@@ -355,7 +262,7 @@ def _calc_normcontours_complex(hv4_vo1, vo1_vo2, outer, outer_sources):
         x_hv4 = pts_ho[:,pii[0]]
         x_vo  = pts_ho[:,pii[1]]
         x_hii = hv4_vo1[:,hii_hv4]
-        if _closer(x_hii, x_hv4, x_vo): (hii_end, pii_end) = (hii_vo,  pii[1])
+        if iscloser(x_hii, x_hv4, x_vo): (hii_end, pii_end) = (hii_vo,  pii[1])
         else:                           (hii_end, pii_end) = (hii_hv4, pii[0])
     hv4_vo1_norm = np.hstack([pts_ho[:,[0]],
                               hv4_vo1[:, (hii_v3v + 1):hii_end],
@@ -364,13 +271,13 @@ def _calc_normcontours_complex(hv4_vo1, vo1_vo2, outer, outer_sources):
                             outer[:, (oii[pii[0]] + 1):oii[pii[1]]],
                             pts_ho[:, [pii[1]]]])
     # Now, we can find the intersection of outer and VO1/VO2.
-    (vii, uii, pts_vu) = _cross_isect(vo1_vo2, outer_norm)
+    (vii, uii, pts_vu) = cross_isect_2D(vo1_vo2, outer_norm)
     if len(vii) != 2:
         raise RuntimeError(f"{len(vii)} VO1-VO2 / Outer intersections")
     # If uii is descending, then VO1-VO2 is backwards.
     if uii[1] < uii[0]:
         vo1_vo2 = np.fliplr(vo1_vo2)
-        (vii, uii, pts_vu) = _cross_isect(vo1_vo2, outer_norm)
+        (vii, uii, pts_vu) = cross_isect_2D(vo1_vo2, outer_norm)
     vo1_vo2_norm = np.hstack([pts_vu[:,[0]], 
                               vo1_vo2[:, (vii[0]+1):(vii[1] + 1)],
                               pts_vu[:,[1]]])

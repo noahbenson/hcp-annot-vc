@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import ipywidgets as widgets
 import neuropythy as ny
 
-from .core import (image_order, op_flatmap)
+from .core import (image_order, op_flatmap, nestget)
 from .interface import (
     imgrid_to_flatmap,
     flatmap_to_imgrid,
@@ -60,17 +60,18 @@ boundary_colors = {
     'VO2': (0.5, 0.5, 1)}
 
 def plot_contours(dat, raw=None, ext=None, preproc=None,
-                  contours=None, boundaries=None,
+                  norm=None, boundaries=None,
                   figsize=(2,2), dpi=504, axes=None, 
                   flatmap=True, lw=1, color='prf_polar_angle',
-                  mask=('prf_variance_explained', 0.05, 1)):
+                  mask=('prf_variance_explained', 0.05, 1),
+                  v123=True):
     """Plots a rater's ventral ccontours on the cortical flatmap.
 
     `plot_contours(data)` plots a flatmap of the visual cortex for the
     subject whose data is contained in the parameter `data`. This parameter must
     be an output dictionary of the `vc_plan` plan. Contours can be drawn on the
     flatmap by providing one or more of the optional arguments `raw`, `ext`,
-    `preproc`, `contours`, and `boundaries`. If any of these is set to `True`,
+    `preproc`, `norm`, and `boundaries`. If any of these is set to `True`,
     then that set of contours is drawn on the flatmap with a default
     color-scheme. Alternately, if a dictionary is given, its keys must be the
     contour names and its values must be colors.
@@ -86,8 +87,8 @@ def plot_contours(dat, raw=None, ext=None, preproc=None,
         Whether and how to plot the extended raw contours.
     preproc : boolean or dict, optional
         Whether and how to plot the preprocessed contours.
-    contours : boolean or dict, optional
-        Whether and how to plot the processed contours.
+    norm : boolean or dict, optional
+        Whether and how to plot the normalized processed contours.
     boundaries : boolean or dict, optional
         Whether and how to plot the final boundaries.
     figsize : tuple of 2 ints, optional
@@ -111,6 +112,9 @@ def plot_contours(dat, raw=None, ext=None, preproc=None,
         The mask to use when plotting the color on the flatmap. This option is
         passed directly to the `ny.cortex_plot` function. The default value is
         `('prf_variance_explained', 0.05, 1)`.
+    v123 : boolean, optional
+        Whether to plot the V1, V2, and V3 contours for the subject. The default
+        is `True`.
 
     Returns
     -------
@@ -131,31 +135,38 @@ def plot_contours(dat, raw=None, ext=None, preproc=None,
     # Plot the requested lines:
     if raw is not None:
         if raw is True: raw = raw_colors
-        for (k,v) in dat['raw_contours'].items():
+        for (k,v) in nestget(dat, 'contours').items():
             c = raw.get(k, 'w')
             ax.plot(v[0], v[1], '-', color=c, lw=lw)
     if preproc is not None:
         if preproc is True: preproc = preproc_colors
-        for (k,v) in dat['preproc_contours'].items():
+        for (k,v) in nestget(dat, 'preproc_contours').items():
             c = preproc.get(k, 'w')
             ax.plot(v[0], v[1], '-', color=c, lw=lw)
     if ext is not None:
         if ext is True: ext = ext_colors
-        for (k,v) in dat['ext_contours'].items():
+        for (k,v) in nestget(dat, 'ext_contours').items():
             c = ext.get(k, 'w')
             ax.plot(v[0], v[1], '-', color=c, lw=lw)
-    if contours is not None:
-        if contours is True: contours = ext_colors
-        for (k,v) in dat['contours'].items():
+    if norm is not None:
+        if norm is True: norm = ext_colors
+        for (k,v) in nestget(dat, 'normalized_contours').items():
             c = contours.get(k, 'w')
             ax.plot(v[0], v[1], '-', color=c, lw=lw)
     if boundaries is not None:
         if boundaries is True: boundaries = boundary_colors
-        for (k,v) in dat['boundaries'].items():
+        for (k,v) in nestget(dat, 'boundaries').items():
             c = boundaries.get(k, 'w')
             x = np.concatenate([v[0], [v[0][0]]])
             y = np.concatenate([v[1], [v[1][0]]])
             ax.plot(x, y, '-', color=c, lw=lw)
+    # Finally, plot the v123 contours, if requested.
+    # Grab the subject data, which includes the V1-V3 contours.
+    from .interface import subject_data
+    sdat = subject_data[(dat['sid'],dat['hemisphere'])]
+    # And plot all of these contours:
+    for (x,y) in sdat['v123'].values():
+        ax.plot(x, y, 'w-', lw=0.25)
     ax.axis('off')
     return fig
 
