@@ -134,7 +134,18 @@ def calc_normalized_contours(sid, hemisphere, chirality, rater,
     # It starts at the end of V3d and intersects V3d somewhere; find that                                                                                        
     # intersection first.                                                                                                                                        
     (ii_v3ab, ii_v3d, pts) = cross_isect_2D(v3ab_outer, v3d[:,:-1])
-    if len(ii_v3ab) != 1:
+    if len(ii_v3ab) == 2 and ii_v3ab[0] == 0:
+        # We can fix this case--the rater just clicked on the initial point.
+        ii_v3ab = [ii_v3ab[1]]
+        ii_v3d = [ii_v3d[1]]
+        pts = pts[:,[1]]
+    elif len(ii_v3ab) == 0:
+        # We just use the closest point instead. We use v3d[:,-2] to avoid the
+        # contour extension.
+        v3d_segs = (v3d[:,:-1], v3d[:,1:])
+        (pts, ii_v3d) = seg_nearest(v3d_segs, v3ab_outer[:,-2], argmin=1)
+        ii_v3ab = [v3ab_outer.shape[1] - 2]
+    elif len(ii_v3ab) != 1:
         raise RuntimeError(f"{len(ii_v3ab)} V3ab-outer/V3-dorsal intersections")
     # We can make the V3ab boundary from this.                                                                                                                   
     v3ab_outer = np.hstack([v3ab_outer[:, :ii_v3ab[0]+1], pts])
@@ -149,9 +160,32 @@ def calc_normalized_contours(sid, hemisphere, chirality, rater,
     ii_v3ab = [int(ii0_v3ab.item()), int(ii1_v3ab.item())]
     if ii_v3ab[0] > ii_v3ab[1]:
         ips0_outer = np.fliplr(ips0_outer)
+        (start_ips0, end_ips0) = (end_ips0, start_ips0)
         ii_v3ab = [ii_v3ab[1], ii_v3ab[0]]
     ips0_outer = np.hstack(
         [start_ips0, ips0_outer[:,1:-1], end_ips0])
+    # If there are intersections between ips0_outer and v3ab_outer now, we want
+    # to use those.
+    (ii_ips0, ii_v3abx, pts) = find_crossings(ips0_outer, v3ab_outer)
+    if len(ii_ips0) == 1:
+        # We keep whichever segment is longer.
+        if ii_ips0[0] > ips0_outer.shape[1] - ii_ips0[1] - 1:
+            # Keep the segment from the intersection to the end
+            ips0_outer = np.hstack([pts, ips0_outer[:, ii_ips0[0]+1:]])
+            ii_v3ab[0] = ii_v3ab[0]
+        else:
+            # Keep the segment from the beginning to the intersection.
+            ips0_outer = np.hstack([ips0_outer[:, :ii_ips0[0]+1], pts])
+            ii_v3ab[1] = ii_v3ab[1]
+    elif len(ii_ips0) == 2:
+        # We keep the middle section between the two intersections.
+        ips0_outer = np.hstack(
+            [pts[:,[0]],
+             ips0_outer[:, ii_ips0[0]+1:ii_ips0[1]+1],
+             pts[:, [1]]])
+        ii_v3ab = ii_v3abx
+    elif len(ii_ips0) != 0:
+        raise RuntimeError(f"{len(ii_ips0)} IPS0-outer/V3ab-outer intersections")
     ips0_bound = np.hstack(
         [ips0_outer, np.fliplr(v3ab_outer[:, ii_v3ab[0]+1:ii_v3ab[1]+1])])
     # LO1 should intersect the outer of these boundaries.
@@ -161,10 +195,10 @@ def calc_normalized_contours(sid, hemisphere, chirality, rater,
          v3ab_outer[:, ii_v3ab[1]+1:]])
     (ii_lo1, ii_out, pts) = find_crossings(lo1_outer, outer)
     if len(ii_lo1) < 1:
-        ii_lo1 = [lo1_outer.shape[1] - 1]
-        lo1_seg = (lo1_outer[:,:-1], lo1_outer[:,1:])
+        ii_lo1 = [lo1_outer.shape[1] - 2]
+        outer_seg = (outer[:,:-1], outer[:,1:])
         # We use -2 to avoid the extended contour.
-        (pts, ii_out) = seg_nearest(lo1_seg, lo1_outer[:,-2], argmin=1)
+        (pts, ii_out) = seg_nearest(outer_seg, lo1_outer[:,-2], argmin=1)
         ii_out = [int(ii_out.item())]
     # We just want the first of these; we ignore the rest.                                                                                                       
     (ii_lo1, ii_out) = (ii_lo1[0], ii_out[0])
