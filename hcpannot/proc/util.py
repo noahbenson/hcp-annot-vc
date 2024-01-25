@@ -173,7 +173,10 @@ def seg_nearest(seg, point, argmin=False):
         point = np.ones(a.shape) * point[:,None]
     ab = b - a
     seg_l2 = np.sum(ab**2, axis=0)
-    t = np.sum(ab*(point - a), axis=0) / seg_l2
+    ok = (seg_l2 > 0)
+    inv_segl2 = np.ones_like(seg_l2, dtype=float)
+    inv_segl2[ok] /= seg_l2[ok]
+    t = np.sum(ab*(point - a), axis=0) * inv_segl2
     q = a + t*ab # The nearest point on the line ab to `point`
     qa_l2 = np.sum((a - q)**2, axis=0)
     qb_l2 = np.sum((b - q)**2, axis=0)
