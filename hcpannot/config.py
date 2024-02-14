@@ -76,6 +76,8 @@ subject_list_2 = np.array(
 subject_list_3 = ~(np.isin(subject_list, subject_list_1) |
                    np.isin(subject_list, subject_list_2))
 subject_list_3 = np.sort(subject_list[subject_list_3])
+# The sid that we use as a stand-in for the mean subject.
+meansid = 999999
 
 
 # Processing Configuration #####################################################
@@ -115,8 +117,10 @@ dorsal_raters = [
 raters_by_region = {
     'ventral': ventral_raters,
     'dorsal': dorsal_raters,
-    'meanventral': ventral_raters,
-    'meandorsal': dorsal_raters}
+    'ventral_meanrater': ventral_raters,
+    'dorsal_meanrater': dorsal_raters,
+    'ventral_meansub': ventral_raters,
+    'dorsal_meansub': dorsal_raters}
 
 # Contours ---------------------------------------------------------------------
 # Data about the visual cortex contours we are analyzing.
@@ -139,6 +143,7 @@ traces_ventral = {
     'hV4_outer': '{hemisphere}.hV4_outer_trace.json.gz',
     'VO_outer': '{hemisphere}.VO_outer_trace.json.gz',
     'outer': '{hemisphere}.outer_trace.json.gz',
+    'V3v': '{hemisphere}.V3v_trace.json.gz',
     'hV4': '{hemisphere}.hV4_trace.json.gz',
     'VO1': '{hemisphere}.VO1_trace.json.gz',
     'VO2': '{hemisphere}.VO2_trace.json.gz'}
@@ -168,6 +173,7 @@ paths_ventral = dict(
     hV4_VO1='{hemisphere}.hV4_VO1_path.json.gz',
     VO1_VO2='{hemisphere}.VO1_VO2_path.json.gz',
     outer='{hemisphere}.outer_path.json.gz',
+    V3v='{hemisphere}.V3v_path.json.gz',
     hV4_outer='{hemisphere}.hV4_outer_path.json.gz',
     VO_outer='{hemisphere}.VO_outer_path.json.gz')
 paths_dorsal = dict(
@@ -196,32 +202,46 @@ reports_dorsal = {
 # individual raters. The traces that form the inputs to the meancontours are the
 # meansources. The meansources must get processed into the meancontours, which
 # continue forward with the meantraces, meanpaths, etc.
-meansources_ventral = {
+sources_ventral_meanrater = {
     'hV4_VO1': '{hemisphere}.hV4_VO1_trace.json.gz',
     'VO1_VO2': '{hemisphere}.VO1_VO2_trace.json.gz',
     'hV4_outer': '{hemisphere}.hV4_outer_trace.json.gz',
     'VO_outer': '{hemisphere}.VO_outer_trace.json.gz'}
-meancontours_ventral = {
+contours_ventral_meanrater = {
     'hV4_VO1': '{hemisphere}.hV4_VO1.json',
     'VO1_VO2': '{hemisphere}.VO1_VO2.json',
     'hV4_outer': '{hemisphere}.hV4_outer.json',
     'VO_outer': '{hemisphere}.VO_outer.json'}
-meantraces_ventral = dict(traces_ventral)
-meanboundaries_ventral = dict(boundaries_ventral)
-meanpaths_ventral = dict(paths_ventral)
-meansources_dorsal = {
+traces_ventral_meanrater = dict(traces_ventral)
+boundaries_ventral_meanrater = dict(boundaries_ventral)
+paths_ventral_meanrater = dict(paths_ventral)
+sources_ventral_meansub = dict(
+    sources_ventral_meanrater,
+    V3v='{hemisphere}.V3v_trace.json.gz')
+contours_ventral_meansub = dict(
+    contours_ventral_meanrater,
+    V3v='{hemisphere}.V3v.json')
+traces_ventral_meansub = traces_ventral_meanrater
+boundaries_ventral_meansub = boundaries_ventral_meanrater
+paths_ventral_meansub = paths_ventral_meanrater
+sources_dorsal_meanrater = {
     'V3ab_outer': '{hemisphere}.V3ab_outer_trace.json.gz',
     'V3ab_inner': '{hemisphere}.V3ab_inner_trace.json.gz',
     'IPS0_outer': '{hemisphere}.IPS0_outer_trace.json.gz',
     'LO1_outer': '{hemisphere}.LO1_outer_trace.json.gz'}
-meancontours_dorsal = {
+contours_dorsal_meanrater = {
     'V3ab_outer': '{hemisphere}.V3ab_outer.json',
     'V3ab_inner': '{hemisphere}.V3ab_inner.json',
     'IPS0_outer': '{hemisphere}.IPS0_outer.json',
     'LO1_outer':  '{hemisphere}.LO1_outer.json'}
-meantraces_dorsal = dict(traces_dorsal)
-meanboundaries_dorsal = dict(boundaries_dorsal)
-meanpaths_dorsal = dict(paths_dorsal)
+traces_dorsal_meanrater = dict(traces_dorsal)
+boundaries_dorsal_meanrater = dict(boundaries_dorsal)
+paths_dorsal_meanrater = dict(paths_dorsal)
+sources_dorsal_meansub = sources_dorsal_meanrater
+contours_dorsal_meansub = contours_dorsal_meanrater
+traces_dorsal_meansub = traces_dorsal_meanrater
+boundaries_dorsal_meansub = boundaries_dorsal_meanrater
+paths_dorsal_meansub = paths_dorsal_meanrater
 
 # Processing Data by Group -----------------------------------------------------
 # Mean items 
@@ -243,21 +263,36 @@ labels_by_region = {
 reports_by_region = {
     'ventral': reports_ventral,
     'dorsal': reports_dorsal}
-meansources_by_region = {
-    'ventral': meansources_ventral,
-    'dorsal': meansources_dorsal}
-meancontours_by_region = {
-    'ventral': meancontours_ventral,
-    'dorsal': meancontours_dorsal}
-meantraces_by_region = {
-    'ventral': meantraces_ventral,
-    'dorsal': meantraces_dorsal}
-meanboundaries_by_region = {
-    'ventral': meanboundaries_ventral,
-    'dorsal': meanboundaries_dorsal}
-meanpaths_by_region = {
-    'ventral': meanpaths_ventral,
-    'dorsal': meanpaths_dorsal}
+sources_by_region_meanrater = {
+    'ventral': sources_ventral_meanrater,
+    'dorsal': sources_dorsal_meanrater}
+contours_by_region_meanrater = {
+    'ventral': contours_ventral_meanrater,
+    'dorsal': contours_dorsal_meanrater}
+traces_by_region_meanrater = {
+    'ventral': traces_ventral_meanrater,
+    'dorsal': traces_dorsal_meanrater}
+boundaries_by_region_meanrater = {
+    'ventral': boundaries_ventral_meanrater,
+    'dorsal': boundaries_dorsal_meanrater}
+paths_by_region_meanrater = {
+    'ventral': paths_ventral_meanrater,
+    'dorsal': paths_dorsal_meanrater}
+sources_by_region_meansub = {
+    'ventral': sources_ventral_meansub,
+    'dorsal': sources_dorsal_meansub}
+contours_by_region_meansub = {
+    'ventral': contours_ventral_meansub,
+    'dorsal': contours_dorsal_meansub}
+traces_by_region_meansub = {
+    'ventral': traces_ventral_meansub,
+    'dorsal': traces_dorsal_meansub}
+boundaries_by_region_meansub = {
+    'ventral': boundaries_ventral_meansub,
+    'dorsal': boundaries_dorsal_meansub}
+paths_by_region_meansub = {
+    'ventral': paths_ventral_meansub,
+    'dorsal': paths_dorsal_meansub}
 region_procdata = {
     k: {
         'raters':     raters_by_region.get(k),
@@ -269,18 +304,29 @@ region_procdata = {
         'reports':    reports_by_region.get(k)}
     for k in ('ventral', 'dorsal')}
 region_procdata.update(
-    {f'mean{k}': {
+    {f'{k}_meanrater': {
         'raters':     raters_by_region.get(k),
-        'sources':    meansources_by_region.get(k),
-        'contours':   meancontours_by_region.get(k),
-        'traces':     meantraces_by_region.get(k),
-        'boundaries': meanboundaries_by_region.get(k),
-        'paths':      meanpaths_by_region.get(k),
+        'sources':    sources_by_region_meanrater.get(k),
+        'contours':   contours_by_region_meanrater.get(k),
+        'traces':     traces_by_region_meanrater.get(k),
+        'boundaries': boundaries_by_region_meanrater.get(k),
+        'paths':      paths_by_region_meanrater.get(k),
+        'labels':     labels_by_region.get(k),
+        'reports':    reports_by_region.get(k)}
+     for k in ('ventral', 'dorsal')})
+region_procdata.update(
+    {f'{k}_meansub': {
+        'raters':     raters_by_region.get(k),
+        'sources':    sources_by_region_meansub.get(k),
+        'contours':   contours_by_region_meansub.get(k),
+        'traces':     traces_by_region_meansub.get(k),
+        'boundaries': boundaries_by_region_meansub.get(k),
+        'paths':      paths_by_region_meansub.get(k),
         'labels':     labels_by_region.get(k),
         'reports':    reports_by_region.get(k)}
      for k in ('ventral', 'dorsal')})
 # We define this simple function for looking up processing data.
-def procdata(region, step, mean=None):
+def procdata(region, step):
     """Returns the processing data for the requested processing region and step.
 
     The `procdata` function returns a dictionary of the processing data
@@ -293,20 +339,14 @@ def procdata(region, step, mean=None):
         The cortical regions; may be `'ventral'` or `'dorsal'`.
     step : str
         The processing step; may be `'contours'`, `'traces'`, `'boundaries'`,
-        `'paths'`, `'meansources'`, `'meancontours'`, `'meantraces'`,
-        `'meanboundaries'`, or `'meanpaths'`.
-    mean : boolean or None, optional
-        Whether to interpret the step as a step in the mean-processing part of
-        the pipeline. If `True` then the string `'mean'` is prepended to the
-        step unless the step already starts with `'mean'`; if `False`, then no
-        such conversion is made and an error is raised if the step starts with
-        `'mean'`; if `None` (the default) then no change to the step or
-        checking is made.
+        `'paths'`, `'sources_meanrater'`, `'contours_meanrater'`,
+        `'traces_meanrater'`, `'boundaries_meanrater'`, or `'paths_meanrater'`.
 
     Returns
     -------
     dict
         A dictionary of data associated with the given region and step.
+
     """
     if not isinstance(region, str):
         raise ValueError("procdata argument region must be a string")
@@ -316,14 +356,6 @@ def procdata(region, step, mean=None):
         regdata = region_procdata[region]
     if not isinstance(step, str):
         raise ValueError("procdata argument step must be a string")
-    elif mean is True:
-        if not step.startswith('mean'):
-            step = 'step' + step
-    elif mean is False:
-        if step.startswith('mean'):
-            raise ValueError(f"mean=False but step starts with 'mean': {step}")
-    elif mean is not None:
-        raise ValueError("procdata argument mean must be True, False, or None")
     res = regdata.get(step, None)
     if res is None:
         raise ValueError(
@@ -409,7 +441,11 @@ def cortex(sid, h):
     """
     import neuropythy as ny
     sid = int(sid)
-    sub = ny.data['hcp_lines'].subjects[sid]
+    # If this is the mean subject, we return the fsaverage hemisphere.
+    if sid == meansid:
+        sub = ny.freesurfer_subject('fsaverage')
+    else:
+        sub = ny.data['hcp_lines'].subjects[sid]
     hem = sub.hemis[h]
     return hem
 

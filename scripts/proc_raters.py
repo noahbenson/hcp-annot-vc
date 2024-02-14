@@ -8,7 +8,7 @@ import hcpannot
 import hcpannot.cmd as hcpa_cmd
 
 from hcpannot.mp import (makejobs, mprun)
-from hcpannot.proc import proc_all
+from hcpannot.proc import allproc
 
 hcpa_conf = hcpa_cmd.ConfigInOut(
     prog='proc_raters.py',
@@ -35,14 +35,14 @@ if region not in ('ventral', 'dorsal'):
 
 # Make the job list.
 opts = dict(save_path=save_path, load_path=load_path, overwrite=overwrite)
-def call_proc_all(sid, h):
-    return proc_all(region, rater=raters, sid=sid, hemisphere=h, **opts)
+def call_allproc(sid, h):
+    return allproc(region, rater=raters, sid=sid, hemisphere=h, **opts)
 def firstarg(a, b):
     return a
 jobs = makejobs(sids, hemis)
 # Run this step in the processing.
 dfs = proc_traces_results = mprun(
-    call_proc_all, jobs, region,
+    call_allproc, jobs, region,
     nproc=nproc,
     onfail=firstarg,
     onokay=firstarg)

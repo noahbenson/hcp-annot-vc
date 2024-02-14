@@ -25,23 +25,25 @@ cd "$SCRIPT_DIR"/..
     || die "script must be in the hcp-annot-vc repo when run"
 
 # Figure out which region we are processing.
+region="$1"
 if [ "$1" = "ventral" ]
 then RATERS=(${VENTRAL_RATERS[@]})
 elif [ "$1" = "dorsal" ]
 then RATERS=(${DORSAL_RATERS[@]})
 else die "Syntax: proc_all.sh [ventral|dorsal] [options]"
 fi
+shift
 
 # (1) Process all the individual raters.
 python scripts/proc_raters.py \
-    "$1" \
+    "$region" \
     "$SAVE_PATH" "$PROC_PATH" \
-    --raters ${RATERS[@]} "$@"
+    "$@" --raters ${RATERS[@]}
 # (2) Process the means.
 python scripts/proc_means.py \
-    "$1" \
+    "$region" \
     "$PROC_PATH"/traces "$PROC_PATH" \
-    --raters ${RATERS[@]} "$@"
+    "$@" --raters ${RATERS[@]}
 
 # That's it!
 exit 0

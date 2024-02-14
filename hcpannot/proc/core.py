@@ -18,7 +18,8 @@ from ..config import (
     to_data_path,
     cortex,
     labelkey,
-    meanrater)
+    meanrater,
+    meansid)
 from ..core import (
     op_flatmap)
 from ..io import (
@@ -126,10 +127,10 @@ def calc_load_cortex(sid, hemisphere, chirality):
     data = ny.data['hcp_lines']
     if (sid, chirality, 'mean') in data.exclusions:
         raise RuntimeError(f"excluded hemisphere: {sid}/{chirality}")
-    # Otherwise grab them.
+    # Otherwise grab them (this will return fsaverage for the meansid).
     return (cortex(sid, hemisphere),)
 @pimms.calc('flatmap')
-def calc_flatmap(cortex):
+def calc_flatmap(sid, cortex):
     """Calculates the flatmap used for annotation.
     
     Parameters
@@ -142,11 +143,53 @@ def calc_flatmap(cortex):
     flatmap : neuropythy Mesh
         A 2D mesh of the flattened cortex.
     """
-    return (op_flatmap(cortex),)
+    # We use a special map for the mean subject id:
+    if sid == meansid:
+        return (ny.to_flatmap('occipital_pole', cortex, radius=np.pi/2),)
+    else:
+        return (op_flatmap(cortex),)
+@pimms.calc('fsaverage_mapproj')
+def calc_fsaverage_mapproj(chirality):
+    """Calculates the map projection used in fsaverage projection.
+
+    Parameters
+    ----------
+    chirality : str
+        Either `'lh'` or `'rh'`, indicating the hemisphere.
+
+    Outputs
+    -------
+    fsaverage_mapproj : neuropythy MapProjection
+        A `MapProjection` object that details the parameters of the mapping from
+        the fsaverage cortical surface to a flatmap.
+    """
+    mp = ny.to_map_projection(
+        'occipital_pole',
+        hemi=chirality,
+        radius=np.pi/2)
+    return (mp,)
+@pimms.calc('fsaverage_flatmap')
+def calc_fsaverage_flatmap(cortex, fsaverage_mapproj):
+    """Calculates the flatmap used for alignment to the fsaverage.
+    
+    Parameters
+    ----------
+    cortex : neuropythy Cortex
+        The cortex object whose annotations are being examined.
+    fsaverage_mapproj : neuropythy MapProjection
+        A `MapProjection` object that details the parameters of the mapping from
+        the fsaverage cortical surface to a flatmap.
+    
+    Outputs
+    -------
+    fsaverage_flatmap : neuropythy Mesh
+        A 2D mesh of the flattened cortex that is aligned to the fsaverage.
+    """
+    return (ny.to_flatmap(fsaverage_mapproj, cortex),)
 @pimms.calc('contours')
-def calc_mean_contours(sid, chirality, load_path, save_path, region, io_options,
-                       npoints=500, min_raters=3, source_raters=None,
-                       rater=meanrater):
+def calc_meanrater_contours(sid, chirality, load_path, save_path, region,
+                            io_options, npoints=500, min_raters=3,
+                            source_raters=None, rater=meanrater):
     """Load or calculate the contours for the mean rater.
     
     Parameters
@@ -229,21 +272,120 @@ def calc_mean_contours(sid, chirality, load_path, save_path, region, io_options,
                 filenames=region,
                 **io_options)
     return (contours,)
+@pimms.calc('contours')
+def calc_meansub_contours(rater, chirality, load_path, save_path,
+                          region, io_options, npoints=500,
+                          source_sids=None, sid=None):
+    """Load or calculate the contours for the mean rater.
+    
+    Parameters
+    ----------
+    rater : str
+        The rater whose subjects are being averaged.
+    chirality : 'lh' or 'rh'
+        The hemisphere (`'lh'` or `'rh'`) to load.
+    load_path : str
+        The path where the individual raters' traces have been stored. If the
+        trace files are stored in a directory corresponding to
+        `{rootpath}/traces/{rater}/{sid}/` then the provided `load_path` should
+        me `{rootpath}/traces/`.
+    save_path : directory name
+        The directory to which this set of contours, traces, and other products
+        should be saved. Traces themselves are saved into a directory equivalen
+        to `os.path.join(save_path, rater, str(sid))`.
+    region : str
+        The region name for the contours being loaded.
+    source_sids : sequence of int or None, optional
+        The subject IDs whose contours should be averaged. If `None` (the
+        default), then the all HCP retinotopy subjects are used.
+    sid : int, optional
+        The subject ID for the mean subject whose contours are to be loaded or
+        computed. By default this is `999999`.
+    npoints : int, optional
+        The number of points to split each rater's trace into when averaging. By
+        default this is 500.
+
+    Outputs
+    -------
+    contours : dict
+        A persistent dictionary of contours; the keys are the contour names,
+        and the values are the average contours across raters.
+    """
+    h = chirality
+    overwrite = io_options.get('overwrite', None)
+    assert region.endswith('_meansub'), f"invalid meansub region: {region}"
+    if source_sids is None:
+        from ..config import subject_list as source_sids
+    if sid is None:
+        sid = meansid
+    # We first want to try to load them.
+    contour_filenames = procdata(region, 'contours')
+    means_path = os.path.join(save_path, 'means')
+    fsatraces_path = os.path.join(save_path, 'fsaverage_traces')
+    contours = None
+    loaded = False
+    if overwrite is not True:
+        try:
+            contours = load_contours(
+                rater, sid, chirality, contour_filenames,
+                load_path=means_path)
+            loaded = True
+        except FileNotFoundError:
+            pass
+    if contours is None:
+        # We need to load the traces, calculate the contours, then save them.
+        if source_sids is None:
+            from .config import subject_list as source_sids
+        source_traces = procdata(region, 'sources')
+        traces = {}
+        for sid in source_sids:
+            try:
+                traces[sid] = load_traces(
+                    rater, sid, h, source_traces,
+                    load_path=fsatraces_path)
+            except FileNotFoundError:
+                pass
+        # We have loaded enough traces; now we average them into contours.
+        contours = {}
+        for name in source_traces.keys():
+            trs = [
+                trace_set[name].curve.linspace(npoints)
+                for (rater,trace_set) in traces.items()]
+            contours[name] = np.mean(trs, axis=0)
+        if overwrite is not False or not loaded:
+            save_contours(
+                rater, meansid, h, contours,
+                save_path=means_path,
+                filenames=region,
+                **io_options)
+    return (contours,)
 
 
 # The plan ---------------------------------------------------------------------
 init_plan = pimms.plan(
-    io_options      = calc_io_options,
-    parse_chirality = calc_parse_chirality,
-    load_contours   = calc_load_contours,
-    load_cortex     = calc_load_cortex,
-    flatmap         = calc_flatmap)
-init_meanplan = pimms.plan(
-    io_options      = calc_io_options,
-    parse_chirality = calc_parse_chirality,
-    calc_contours   = calc_mean_contours,
-    load_cortex     = calc_load_cortex,
-    flatmap         = calc_flatmap)
+    io_options        = calc_io_options,
+    parse_chirality   = calc_parse_chirality,
+    load_contours     = calc_load_contours,
+    load_cortex       = calc_load_cortex,
+    flatmap           = calc_flatmap,
+    fsaverage_mapproj = calc_fsaverage_mapproj,
+    fsaverage_flatmap = calc_fsaverage_flatmap)
+init_plan_meanrater = pimms.plan(
+    io_options        = calc_io_options,
+    parse_chirality   = calc_parse_chirality,
+    calc_contours     = calc_meanrater_contours,
+    load_cortex       = calc_load_cortex,
+    flatmap           = calc_flatmap,
+    fsaverage_mapproj = calc_fsaverage_mapproj,
+    fsaverage_flatmap = calc_fsaverage_flatmap)
+init_plan_meansub = pimms.plan(
+    io_options        = calc_io_options,
+    parse_chirality   = calc_parse_chirality,
+    calc_contours     = calc_meansub_contours,
+    load_cortex       = calc_load_cortex,
+    flatmap           = calc_flatmap,
+    fsaverage_mapproj = calc_fsaverage_mapproj,
+    fsaverage_flatmap = calc_fsaverage_flatmap)
 
 
 # The Data Plan ################################################################
@@ -314,6 +456,23 @@ def forward_flatmap(nested_data):
         The neuropythy 2D `Mesh` object on which contours are being processed.
     """
     return (nested_data['flatmap'],)
+@pimms.calc('fsaverage_flatmap')
+def forward_fsaverage_flatmap(nested_data):
+    """Retrieve the `'fsaverage_flatmap'` data from the `nested_data` initial
+    processing.
+    
+    Parameters
+    ----------
+    nested_data : dict-like
+        A dictionary of data from which the ouptuts are extracted. Nested data
+        dictionaries are used to introduce lazy logic to the pipelines.
+
+    Outputs
+    -------
+    fsaverage_flatmap
+        The neuropythy 2D `Mesh` object aligned to the fsaverage subject.
+    """
+    return (nested_data['fsaverage_flatmap'],)
 @pimms.calc('contours')
 def forward_contours(nested_data):
     """Retrieve the `'contours'` data from the `nested_data` initial processing.
@@ -347,6 +506,24 @@ def forward_traces(nested_data):
         contours.
     """
     return (nested_data['traces'],)
+@pimms.calc('fsaverage_traces')
+def forward_fsaverage_traces(nested_data):
+    """Retrieve the `'fsaverage_traces'` data from the `nested_data` initial
+    processing.
+    
+    Parameters
+    ----------
+    nested_data : dict-like
+        A dictionary of data from which the ouptuts are extracted. Nested data
+        dictionaries are used to introduce lazy logic to the pipelines.
+
+    Outputs
+    -------
+    fsaverage_traces : dict
+        The neuropythy path-trace objects that represent the processed / cleaned
+        contours after projection to the fsaverage.
+    """
+    return (nested_data['fsaverage_traces'],)
 @pimms.calc('paths')
 def forward_paths(nested_data):
     """Retrieve the `'paths'` data from the `nested_data` initial processing.
@@ -384,12 +561,16 @@ fwdplan_contours = pimms.plan(
     constants=forward_constants,
     cortex=forward_cortex,
     flatmap=forward_flatmap,
+    fsaverage_flatmap=forward_fsaverage_flatmap,
     contours=forward_contours)
 fwdplan_traces = pimms.plan(
     fwdplan_contours,
     traces=forward_traces)
-fwdplan_paths = pimms.plan(
+fwdplan_fsaverage_traces = pimms.plan(
     fwdplan_traces,
+    fsaverage_traces=forward_fsaverage_traces)
+fwdplan_paths = pimms.plan(
+    fwdplan_fsaverage_traces,
     paths=forward_paths)
 fwdplan_labels = pimms.plan(
     fwdplan_paths,
@@ -424,6 +605,66 @@ def calc_fwdtraces(rater, sid, chirality, save_path,
                 filenames=region,
                 **io_options)
     return (traces,)
+@pimms.calc('fsaverage_traces')
+def calc_fsaverage_traces(rater, sid, chirality, save_path,
+                          nested_data, io_options, region,
+                          npoints=500):
+    """Either loads the fsaverage-aligned trace data from the filesystem or
+    retrieves it from the `nested_data` plan-data object.
+
+    Parameters
+    ----------
+    flatmap : neuropythy Mesh
+        The flatmap object on which the annotations were drawn.
+    fsaverage_flatmap : neuropythy Mesh
+        The fsaverage-aligned flatmap object to which the annotations are to be
+        projected.
+    traces : dict
+        The traces that are to be fsaverage-aligned.
+    npoints : int, optional
+        The number of points that the fsaverage-aligned traces should contain.
+        The default is 500.
+    rater : str, optional
+        The name of the rater; if not provided, this defaults to the mean rater.
+    
+    Outputs
+    -------
+    fsaverage_traces : dict
+        A dictionary of the fsaverage-aligned contours. These contours will each
+        consist of 500 evenly-spaced points.
+    """
+    h = chirality
+    overwrite = io_options['overwrite']
+    traces_path = os.path.join(save_path, 'fsaverage_traces')
+    fsa_traces = None
+    if overwrite is not True:
+        # We try loading them and only calculate them if we aren't overwriting.
+        try:
+            fsa_traces = load_traces(
+                rater, sid, h, region,
+                load_path=traces_path)
+        except FileNotFoundError:
+            pass
+    if fsa_traces is None:
+        flatmap = nested_data['flatmap']
+        fsaverage_flatmap = nested_data['fsaverage_flatmap']
+        mp = fsaverage_flatmap.meta_data['projection']
+        fsa_traces = {}
+        for (k,tr) in nested_data['traces'].items():
+            pts = tr.curve.linspace(npoints)
+            addrs = flatmap.address(pts)
+            fsa_pts = fsaverage_flatmap.unaddress(addrs)
+            closed = tr.closed
+            fsa_traces[k] = ny.path_trace(mp, fsa_pts, closed=closed)
+        # We don't try to save if overwrite is False because it will raise an
+        # unnecessary error.
+        if overwrite is not False:
+            save_traces(
+                rater, sid, h, fsa_traces,
+                save_path=traces_path,
+                filenames=region,
+                **io_options)
+    return (fsa_traces,)
 @pimms.calc('paths')
 def calc_paths(rater, sid, chirality, save_path,
                nested_data, cortex, io_options, region):
@@ -543,6 +784,9 @@ def calc_reports(rater, sid, chirality, save_path,
         rlabelkey = {v:k for (k,v) in labelkey.items()}
         roi = hem.prop('cortex_label')
         sa = hem.prop('midgray_surface_area')
+        if sa.shape == () and sa.item() is None:
+            # fsaverage has no midgray surface area, so we use white.
+            sa = hem.prop('white_surface_area')
         cortex_sa = np.sum(sa[roi])
         lbl = nested_data['labels']
         lbl_sareas = {'cortex': cortex_sa}
@@ -567,8 +811,11 @@ def calc_reports(rater, sid, chirality, save_path,
 traces_plan = pimms.plan(
     fwdplan_contours,
     traces=calc_fwdtraces)
-paths_plan = pimms.plan(
+fsaverage_traces_plan = pimms.plan(
     fwdplan_traces,
+    fsaverage_traces=calc_fsaverage_traces)
+paths_plan = pimms.plan(
+    fwdplan_fsaverage_traces,
     paths=calc_paths)
 labels_plan = pimms.plan(
     fwdplan_paths,
@@ -755,6 +1002,7 @@ def export_images(rater, sid, h,
         contours correspond to those drawn by raters using the annotation tool.
         The default is `hcpannot.analysis.vc_contours`.
     """
+    from ..interface import subject_data
     # If load path isn't provided, we guess it.
     if contours_load_path is None:
         contours_load_path = save_path

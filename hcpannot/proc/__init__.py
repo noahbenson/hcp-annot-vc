@@ -5,14 +5,22 @@
 # for the various regions annotated in the HCP annotation project.
 
 from .core    import init_plan
-from .ventral import ventral_contours_plan, ventral_contours_meanplan
-from .dorsal  import dorsal_contours_plan, dorsal_contours_meanplan
+from .ventral import (
+    ventral_contours_plan,
+    ventral_contours_plan_meanrater,
+    ventral_contours_plan_meansub)
+from .dorsal  import (
+    dorsal_contours_plan,
+    dorsal_contours_plan_meanrater,
+    dorsal_contours_plan_meansub)
 
 contours_plans = {
     'ventral': ventral_contours_plan,
-    'meanventral': ventral_contours_meanplan,
+    'ventral_meanrater': ventral_contours_plan_meanrater,
+    'ventral_meansub': ventral_contours_plan_meansub,
     'dorsal': dorsal_contours_plan,
-    'meandorsal': dorsal_contours_meanplan}
+    'dorsal_meanrater': dorsal_contours_plan_meanrater,
+    'dorsal_meansub': dorsal_contours_plan_meansub}
 
 def proc(contours_plan, **kw):
     """Returns a visual cortex processing plan dict based on the given subplan.
@@ -106,7 +114,9 @@ def proc(contours_plan, **kw):
         A dictionary of reports generated (typically surface area).
 
     """
-    from .core import traces_plan, paths_plan, labels_plan, reports_plan
+    from .core import (
+        traces_plan, fsaverage_traces_plan, paths_plan,
+        labels_plan, reports_plan)
     if isinstance(contours_plan, str):
         cp = contours_plans.get(contours_plan)
         if cp is None:
@@ -117,11 +127,13 @@ def proc(contours_plan, **kw):
     save_path = kw.pop('save_path')
     contours_data = contours_plan(**kw)
     traces_data = traces_plan(nested_data=contours_data, save_path=save_path)
-    paths_data = paths_plan(nested_data=traces_data, save_path=save_path)
+    fsatraces_data = fsaverage_traces_plan(
+        nested_data=traces_data, save_path=save_path)
+    paths_data = paths_plan(nested_data=fsatraces_data, save_path=save_path)
     labels_data = labels_plan(nested_data=paths_data, save_path=save_path)
     reports_data = reports_plan(nested_data=labels_data, save_path=save_path)
     return reports_data
-def proc_all(contours_plan, **kw):
+def allproc(contours_plan, **kw):
     """Processes one or all of the given plans and returns a dataframe.
 
     Repeatedly calls `proc` on the raters, subjects, and hemispheres given in
@@ -157,9 +169,11 @@ def proc_all(contours_plan, **kw):
                         **kw)
                     # Force all the data to calculate.
                     traces = data['traces']
+                    fsa_traces = data['fsaverage_traces']
                     paths = data['paths']
                     labels = data['labels']
                     reports = data['reports']
+                    fstraces = data['fsaverage_traces']
                 except Exception as e:
                     error = str(e)
                 t1 = time()
@@ -170,16 +184,16 @@ def proc_all(contours_plan, **kw):
                 res['dt'].append(t1 - t0)
                 res['error'].append(error)
     return DataFrame(res)
-def meanproc(contours_plan, **kw):
-    """Returns a processing plan dictionary for the mean contours.
+def proc_meanrater(contours_plan, **kw):
+    """Returns a processing plan dictionary for the mean rater's contours.
 
-    The `meanproc` function is roughly equivalent to the `proc` function except
-    that it operates over the processed traces of a set of raters and produces
-    contours that represent the mean of these traces then processes these
-    contours. The `meanproc` function has a small number of differences from the
-    `proc` function, which are listed here.
-     * The `rater` parameter of `meanproc` is optional, and the default rater
-       name is `'mean'`.
+    The `proc_meanrater` function is roughly equivalent to the `proc` function
+    except that it operates over the processed traces of a set of raters and
+    produces contours that represent the mean of these traces then processes
+    these contours. The `proc_meanrater` function has a small number of
+    differences from the `proc` function, which are listed here.
+     * The `rater` parameter of `proc_meanrater` is optional, and the default
+       rater name is `'mean'`.
      * The parameter `source_raters` may be given a list of raters whose traces
        should be averaged. By default (or if `None` is given), all of the raters
        defined in the `hcpannot.config` namespace for the given `region` are
@@ -191,24 +205,28 @@ def meanproc(contours_plan, **kw):
        `traces` of the `save_path`, under the assumption that the processing
        for the individual raters and for the mean contours are using the same
        output directory.
+
     """
     from ..config import (procdata, meanrater)
-    from .core import traces_plan, paths_plan, labels_plan, reports_plan
+    from .core import (
+        traces_plan, fsaverage_traces_plan, paths_plan,
+        labels_plan, reports_plan)
     # Process the arguments.
     rater = kw.pop('rater', meanrater)
     kw['rater'] = rater
-    if isinstance(contours_plan, str):
-        if not contours_plan.startswith('mean'):
-            contours_plan = 'mean' + contours_plan
-        cp = contours_plans.get(contours_plan)
-        if cp is None:
-            raise ValueError(f"unrecognized contours plan: {contours_plan}")
-        if 'region' not in kw:
-            kw['region'] = contours_plan
-        contours_plan = cp
+    if not isinstance(contours_plan, str):
+        raise ValueError("contours_plan must be a string")
+    if 'region' not in kw:
+        kw['region'] = contours_plan
+    if not contours_plan.endswith('_meanrater'):
+        contours_plan = contours_plan + '_meanrater'
+    cp = contours_plans.get(contours_plan)
+    if cp is None:
+        raise ValueError(f"unrecognized contours plan: {contours_plan}")
+    contours_plan = cp
     reg = kw.get('region', None)
-    if isinstance(reg, str) and not reg.startswith('mean'):
-        kw['region'] = 'mean' + reg
+    if isinstance(reg, str) and not reg.endswith('_meanrater'):
+        kw['region'] = reg + '_meanrater'
     save_path = kw['save_path']
     load_path = kw.get('load_path', None)
     if load_path is None:
@@ -216,24 +234,27 @@ def meanproc(contours_plan, **kw):
     # Run and nest the plans.
     contours_data = contours_plan(**kw)
     traces_data = traces_plan(nested_data=contours_data, save_path=save_path)
-    paths_data = paths_plan(nested_data=traces_data, save_path=save_path)
+    fsatraces_data = fsaverage_traces_plan(
+        nested_data=traces_data, save_path=save_path)
+    paths_data = paths_plan(nested_data=fsatraces_data, save_path=save_path)
     labels_data = labels_plan(nested_data=paths_data, save_path=save_path)
     reports_data = reports_plan(nested_data=labels_data, save_path=save_path)
     return reports_data
-def meanproc_all(contours_plan, **kw):
+def allproc_meanrater(contours_plan, **kw):
     """Processes one or all of the given mean plans and returns a dataframe.
 
-    Repeatedly calls `meanproc` on the subjects and hemispheres given in the
-    keyword arguments. If errors arise, they are logged. Otherwise, the returned
-    dataframe contains meta-data about the processing.
+    Repeatedly calls `proc_meanrater` on the subjects and hemispheres given in
+    the keyword arguments. If errors arise, they are logged. Otherwise, the
+    returned dataframe contains meta-data about the processing.
 
-    For information on parameters and outputs, see the `meanproc` function.
+    For information on parameters and outputs, see the `proc_meanrater`
+    function.
     """
     from time import time
     from pandas import DataFrame
     from numbers import Integral
     from ..config import meanrater
-    meanrater = kw.get('rater', meanrater)
+    rater = kw.get('rater', meanrater)
     sids = kw.pop('sid')
     hs = kw.pop('hemisphere')
     if isinstance(sids, Integral):
@@ -248,12 +269,13 @@ def meanproc_all(contours_plan, **kw):
             error = ''
             t0 = time()
             try:
-                data = meanproc(
+                data = proc_meanrater(
                     contours_plan,
-                    sid=sid, hemisphere=h,
+                    rater=rater, sid=sid, hemisphere=h,
                     **kw)
                 # Force all the data to calculate.
                 traces = data['traces']
+                fsa_traces = data['fsaverage_traces']
                 paths = data['paths']
                 labels = data['labels']
                 reports = data['reports']
@@ -261,8 +283,111 @@ def meanproc_all(contours_plan, **kw):
                 error = str(e)
             t1 = time()
             # Note that we fill a 'rater' column with 'mean' to be
-            # consisitent with the proc_all function outputs.
-            res['rater'].append(meanrater)
+            # consisitent with the allproc function outputs.
+            res['rater'].append(rater)
+            res['sid'].append(sid)
+            res['hemisphere'].append(h)
+            res['dt'].append(t1 - t0)
+            res['error'].append(error)
+    return DataFrame(res)
+def proc_meansub(contours_plan, **kw):
+    """Returns a processing plan dictionary for the mean subject's contours.
+
+    The `proc_meansub` function is roughly equivalent to the `proc` function
+    except that it operates over the processed traces of a set of subjects and
+    produces contours that represent the mean of these traces then processes
+    these contours. The `proc_meansub` function has a small number of
+    differences from the `proc` function, which are listed here.
+     * The `sid` parameter of `proc_meansub` is optional, and the default
+       subject ID is `999999`.
+     * The parameter `source_sids` may be given a list of subject IDs whose
+       traces should be averaged. By default (or if `None` is given), all of the
+       subjects defined in the `hcpannot.config` namespace are used.
+     * If the `contours_plan` argument is a string like `'ventral'` that does
+       not end with `'_meansub'`, then `'_meansub'` is appended to it. The same
+       is true of the `region` parameter.
+     * The `load_path` option, if not provided, defaults to the subdirectory
+       `fsaverage_traces` of the `save_path`, under the assumption that the
+       processing for the individual raters and for the mean contours are using
+       the same output directory.
+    """
+    from ..config import (procdata, meansid)
+    from .core import (
+        traces_plan, fsaverage_traces_plan, paths_plan,
+        labels_plan, reports_plan)
+    # Process the arguments.
+    sid = kw.pop('sid', meansid)
+    kw['sid'] = sid
+    if not isinstance(contours_plan, str):
+        raise ValueError("contours_plan must be a string")
+    if 'region' not in kw:
+        kw['region'] = contours_plan
+    if not contours_plan.endswith('_meansub'):
+        contours_plan = contours_plan + '_meansub'
+    cp = contours_plans.get(contours_plan)
+    if cp is None:
+        raise ValueError(f"unrecognized contours plan: {contours_plan}")
+    contours_plan = cp
+    reg = kw.get('region', None)
+    if isinstance(reg, str) and not reg.endswith('_meansub'):
+        kw['region'] = reg + '_meansub'
+    save_path = kw['save_path']
+    load_path = kw.get('load_path', None)
+    if load_path is None:
+        kw['load_path'] = save_path
+    # Run and nest the plans.
+    contours_data = contours_plan(**kw)
+    traces_data = traces_plan(nested_data=contours_data, save_path=save_path)
+    fsatraces_data = fsaverage_traces_plan(
+        nested_data=traces_data, save_path=save_path)
+    paths_data = paths_plan(nested_data=fsatraces_data, save_path=save_path)
+    labels_data = labels_plan(nested_data=paths_data, save_path=save_path)
+    reports_data = reports_plan(nested_data=labels_data, save_path=save_path)
+    return reports_data
+def allproc_meansub(contours_plan, **kw):
+    """Processes one or all of the given mean plans and returns a dataframe.
+
+    Repeatedly calls `proc_meansub` on the raters and hemispheres given in
+    the keyword arguments. If errors arise, they are logged. Otherwise, the
+    returned dataframe contains meta-data about the processing.
+
+    For information on parameters and outputs, see the `proc_meansub`
+    function.
+    """
+    from time import time
+    from pandas import DataFrame
+    from ..config import (procdata, meansid)
+    sid = kw.get('sid', meansid)
+    raters = kw.pop('rater')
+    hs = kw.pop('hemisphere')
+    if isinstance(raters, str):
+        raters = [raters]
+    if isinstance(hs, str):
+        hs = [hs]
+    # We process by subject and hemisphere first because it is smarter in terms
+    # of how/when we do disk i/o.
+    res = dict(rater=[], sid=[], hemisphere=[], dt=[], error=[])
+    for rater in raters:
+        for h in hs:
+            error = ''
+            t0 = time()
+            try:
+                data = proc_meansub(
+                    contours_plan,
+                    sid=sid, rater=rater, hemisphere=h,
+                    **kw)
+                # Force all the data to calculate.
+                traces = data['traces']
+                fsa_traces = data['fsaverage_traces']
+                paths = data['paths']
+                labels = data['labels']
+                reports = data['reports']
+            except Exception as e:
+                error = str(e)
+            t1 = time()
+            # Note that we fill a 'rater' column with 'mean' to be
+            # consisitent with the allproc function outputs.
+            res['rater'].append(rater)
             res['sid'].append(sid)
             res['hemisphere'].append(h)
             res['dt'].append(t1 - t0)

@@ -23,6 +23,7 @@ import neuropythy as ny
 
 from ..config import (
     meanrater,
+    meansid,
     procdata)
 from ..io import (
     save_contours, load_contours,
@@ -32,7 +33,8 @@ from ..io import (
     save_reports,  load_reports)
 from .core import (
     init_plan,
-    init_meanplan)
+    init_plan_meanrater,
+    init_plan_meansub)
 from .util import (
     cross_isect_2D,
     iscloser,
@@ -69,6 +71,21 @@ def load_v3v_contour(sid, chirality):
     v3v = np.array(v3v)
     # This is the v3-ventral contour.
     return (v3v,)
+@pimms.calc('v3v_contour')
+def load_meansub_v3v_contour(contours):
+    """Loads the V3-ventral contour from the HCP-lines mean subject.
+    
+    Parameters
+    ----------
+    chirality : 'lh' or 'rh'
+        The hemisphere (`'lh'` or `'rh'`) to load.
+        
+    Outputs
+    -------
+    v3v_contour : NumPy array
+        A NumPy array of the points in the V3-ventral contour.
+    """
+    return (np.fliplr(contours['V3v']),)
 @pimms.calc('preproc_contours', 'ext_contours', 'outer_sources')
 def calc_extended_contours(rater, contours, chirality, v3v_contour):
     """Creates and extended hV4/VO1 boundary contour.
@@ -166,6 +183,7 @@ def calc_normalized_contours(sid, hemisphere, chirality, rater, outer_sources,
     bounds = {k: fix_polygon(b) for (k,b) in bounds.items()}
     contours['hV4_outer'] = preproc_contours['hV4_outer']
     contours['VO_outer'] = preproc_contours['VO_outer']
+    contours['V3v'] = preproc_contours['V3v']
     return (contours, bounds)
 def _calc_normcontours_simple(hv4_vo1, vo1_vo2, outer, chirality):
     # The extended vo1/vo2 and hv4/vo contours should each intersect this outer
@@ -315,8 +333,9 @@ def calc_traces(flatmap, boundaries, normalized_contours):
     """Calculates path-traces from the flatmap and boundaries.
     """
     mp = flatmap.meta_data['projection']
-    traces = {k: ny.path_trace(mp, pts, closed=True)
-              for (k,pts) in boundaries.items()}
+    traces = {
+        k: ny.path_trace(mp, pts, closed=True)
+        for (k,pts) in boundaries.items()}
     for (k,pts) in normalized_contours.items():
         traces[k] = ny.path_trace(mp, pts, closed=False)
     return (traces,)
@@ -328,9 +347,15 @@ ventral_contours_plan = pimms.plan(
     extend_contours=calc_extended_contours,
     normalize_contours=calc_normalized_contours,
     traces=calc_traces)
-ventral_contours_meanplan = pimms.plan(
-    init_meanplan,
+ventral_contours_plan_meanrater = pimms.plan(
+    init_plan_meanrater,
     load_v3v_contour=load_v3v_contour,
+    extend_contours=calc_extended_contours,
+    normalize_contours=calc_normalized_contours,
+    traces=calc_traces)
+ventral_contours_plan_meansub = pimms.plan(
+    init_plan_meansub,
+    load_v3v_contour=load_meansub_v3v_contour,
     extend_contours=calc_extended_contours,
     normalize_contours=calc_normalized_contours,
     traces=calc_traces)
