@@ -22,6 +22,7 @@ import neuropythy as ny
 
 from ..config import (
     meanrater,
+    meansid,
     procdata)
 from ..io import (
     save_contours, load_contours,
@@ -31,7 +32,8 @@ from ..io import (
     save_reports,  load_reports)
 from .core import (
     init_plan,
-    init_meanplan)
+    init_plan_meanrater,
+    init_plan_meansub)
 from .util import (
     cross_isect_2D,
     iscloser,
@@ -269,8 +271,14 @@ dorsal_contours_plan = pimms.plan(
     extend_contours=calc_extended_contours,
     normalize_contours=calc_normalized_contours,
     traces=calc_traces)
-dorsal_contours_meanplan = pimms.plan(
-    init_meanplan,
+dorsal_contours_plan_meanrater = pimms.plan(
+    init_plan_meanrater,
+    load_v3d_contour=load_v3d_contour,
+    extend_contours=calc_extended_contours,
+    normalize_contours=calc_normalized_contours,
+    traces=calc_traces)
+dorsal_contours_plan_meansub = pimms.plan(
+    init_plan_meansub,
     load_v3d_contour=load_v3d_contour,
     extend_contours=calc_extended_contours,
     normalize_contours=calc_normalized_contours,
