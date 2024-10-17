@@ -13,6 +13,7 @@ from .dorsal  import (
     dorsal_contours_plan,
     dorsal_contours_plan_meanrater,
     dorsal_contours_plan_meansub)
+from .util import rigid_align_points
 
 contours_plans = {
     'ventral': ventral_contours_plan,

@@ -215,4 +215,176 @@ def find_crossings(crosser, outer):
         mx = np.argmax(np.diff(cii))
         ii = [mx, mx+1]
         (cii, oii, pts) = (cii[ii], oii[ii], pts[:, ii])
-    return (cii, oii, pts)    
+    return (cii, oii, pts)
+
+# the a and b matrices are D x N (D: number of dimensions; N: number of observations)
+def centroid(a, weights=None):
+    """Returns the centroid of `a`.
+    
+    `centroid(a)` returns the mean of the rows of `a`.
+    
+    `centroid(a, w)` returns `dot(a, w) / sum(w)`.
+    """
+    if weights is None:
+        return np.mean(a, axis=1)
+    else:
+        total_weight = np.sum(weights)
+        return np.dot(a, weights) / total_weight
+def centroid_align_points(a, b, weights=None, out=None):
+    """Aligns the centroid of matrix `a` to that of `b`.
+    
+    `centroid_align_points(a, b)` aligns the points in the matrix `a` to those
+    in the matrix `b` by aligning their centroids.
+    
+    Parameters
+    ----------
+    a : matrix
+        The matrix that is to be aligned to matrix `b`. The shape of a can be
+        any shape `(d,n)` where `d` is the number of dimensions, and `n` is the
+        number of points.
+    b : matrix
+        The matrix to which `a` is to be aligned. Must be the same shape as `a`.
+    weights : vector or None, optional
+        The weights or masses to use in calculating the center of mass. The
+        default is `None`.
+    out : matrix or None, optional
+        Where to store the result. If `None` (the default), then a new array is
+        returned. Otherwise, the result is placed in `out`.
+
+    Returns
+    -------
+    matrix
+        The matrix `a` aligned to `b`. If `inplace` is `True` and `a` is a numpy
+        array, `a` is returned.
+    """
+    centroid_a = centroid(a, weights)
+    centroid_b = centroid(b, weights)
+    if out is None:
+        out = np.array(a)
+    elif out is not a:
+        out = np.asarray(out)
+    else:
+        out = np.asarray(out)
+        out[...] = a
+    out += (centroid_b - centroid_a)[:,None]
+    return out
+def rotation_alignment_matrix(a, b, weights=None):
+    """Returns the rotation matrix that, when applied to `a`, aligns `a` to `b`.
+    
+    `rotation_alignment_matrix(a, b)` returns the rotation matrix that aligns
+    `a` to `b`; i.e. if `r = rotation_alignment_matrix(a, b)`, then `dot(r, a)`
+    minimizes the difference between `a` and `b`.
+    
+    `rotation_alignment_matrix(a, b, w)` uses `w` as a weight matrix such that
+    the return value minimizes the weighted difference between `a` and `b`.
+    """
+    # First calculate the covariance matrix.
+    if weights is None:
+        cov = np.dot(b, np.transpose(a))
+    else:
+        weights = np.asarray(weights)
+        cov = np.dot(b * weights[None,:], np.transpose(a))
+        cov /= np.sum(weights)
+    # Next, calculate the singular value decomposition.
+    (u,s,vt) = np.linalg.svd(cov, compute_uv=True)
+    det_u = np.linalg.det(u)
+    det_v = np.linalg.det(vt)
+    d = np.eye(len(a), dtype=np.asarray(a).dtype)
+    d[-1,-1] = np.sign(det_v * det_u)
+    return np.dot(np.dot(u, d), vt)
+def rotation_align_points(a, b, weights=None, out=None):
+    """Aligns the centroid of matrix `a` to that of `b` using rotation.
+    
+    `rotation_align_points(a, b)` aligns the points in the matrix `a` to those
+    in the matrix `b` by rotating `a`.
+    
+    Parameters
+    ----------
+    a : matrix
+        The matrix that is to be aligned to matrix `b`. The shape of a can be
+        any shape `(d,n)` where `d` is the number of dimensions, and `n` is the
+        number of points.
+    b : matrix
+        The matrix to which `a` is to be aligned. Must be the same shape as `a`.
+    weights : vector or None, optional
+        The weights or masses to use in calculating the center of mass. The
+        default is `None`.
+    out : matrix or None, optional
+        Where to store the result. If `None` (the default), then a new array is
+        returned. Otherwise, the result is placed in `out`.
+
+    Returns
+    -------
+    matrix
+        The matrix `a` aligned to `b`. If `inplace` is `True` and `a` is a numpy
+        array, `a` is returned.
+    """
+    rotation_matrix = rotation_alignment_matrix(a, b, weights=weights)
+    if out is not None:
+        out = np.ascontiguousarray(out)
+    return np.dot(rotation_matrix.astype(out.dtype), a, out=out)
+def rigid_align_points(a, b, weights=None, out=None):
+    """Rigidly aligns the points in matrix `a` to the points in matrix `b`.
+    
+    `rigid_align_points(a, b)` aligns the points in the matrix `a` to those in
+    the matrix `b` by first aligning the centroid of `a` to that of `b` then
+    finding and applying the rotation matrix that minimizes the differences
+    between `a` and `b` using the Kabsch-Umeyama algorithm.
+    
+    Parameters
+    ----------
+    a : matrix
+        The matrix that is to be aligned to matrix `b`. The shape of a can be
+        any shape `(d,n)` where `d` is the number of dimensions, and `n` is the
+        number of points.
+    b : matrix
+        The matrix to which `a` is to be aligned. Must be the same shape as `a`.
+    weights : vector or None, optional
+        The weights or masses to use in calculating the center of mass and the
+        covariance matrix. The default is `None`.
+    out : matrix or None, optional
+        Where to store the result. If `None` (the default), then a new array is
+        returned. Otherwise, the result is placed in `out`.
+
+    Returns
+    -------
+    matrix
+        The matrix `a` aligned to `b`. If `inplace` is `True` and `a` is a numpy
+        array, `a` is returned.
+    """
+    # First, find the centroids.
+    centroid_a = centroid(a, weights=weights)[:,None]
+    centroid_b = centroid(b, weights=weights)[:,None]
+    if out is a:
+        out = np.ascontiguousarray(a)
+    elif out is None:
+        out = np.array(a, order='C')
+    else:
+        out = np.ascontiguousarray(out)
+        out[...] = a
+    out -= centroid_a
+    # Then do the rotation. Whether inplace was True or False, it is now okay to
+    # write to a (because either inplace is True or because the 
+    # centroid_align_points function returned a new matrix for us).
+    out = rotation_align_points(out, b - centroid_b, weights=weights, out=out)
+    # Recenter at b's centroid.
+    out += centroid_b
+    # That's it.
+    return out
+def rigid_align_cortices(hem1, hem2, surface='white'):
+    """Rigidly aligns two cortical surfaces.
+    
+    `rigid_align_cortices(hem1, hem2, surf)` is roughly equivalent to the
+    function rigid_align_points(s1.coordinates, s2.coordinates)` where `s1` and
+    `s2` are `hem1.surface(surf)` and `hem2.surface(surf)` respectively. The
+    return value is a surface.
+    """
+    # Get the two surfaces.
+    surf1 = hem1.surface(surface)
+    surf2 = hem2.surface(surface)
+    # Conform surface1 to surface 2.
+    surf1_as_surf2 = hem2.interpolate(hem1, surf2.coordinates)
+    # Then align surface 1 with the conformed surface 1.
+    surf1_on_surf2 = rigid_align_points(surf1.coordinates, surf1as2)
+    # Return the surface with the new coordinates.
+    return surf1.copy(coordinates=surf1on2)
