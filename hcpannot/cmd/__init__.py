@@ -14,23 +14,10 @@ default_cache_path = '/data/crcns2021/hcpannot-cache'
 
 # What we're running.
 # The default raters we are processing over.
+from ..config import ventral_raters, dorsal_raters
 default_raters = {
-    'ventral': [
-        'BrendaQiu',
-        'bogengsong',
-        'JiyeongHa',
-        'lindazelinzhao',
-        'nourahboujaber',
-        'jennifertepan',
-        'mean'],
-    'dorsal': [
-        'Annie-lsc',
-        'BrendaQiu',
-        'oadesiyan',
-        'mominbashir',
-        #'sc5992',
-        'qiutan6li',
-        'mean']}
+    'ventral': ventral_raters + ['mean'],
+    'dorsal': dorsal_raters + ['mean']}
 
 # The hemispheres we are processing over.
 default_hemis = ['lh', 'rh']

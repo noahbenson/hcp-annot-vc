@@ -103,19 +103,16 @@ meanrater = 'mean'
 # The github ids for the raters involved in the project (these are the default
 # processing targets).
 ventral_raters = [
-    'bogengsong',
-    'BrendaQiu',
-    'JiyeongHa',
-    'lindazelinzhao',
-    'nourahboujaber',
-    'jennifertepan']
+    'R1',
+    'R2',
+    'R3',
+    'R4',
+    'R5']
 dorsal_raters = [
-    'Annie-lsc',
-    'BrendaQiu',
-    'mominbashir',
-    #'oadesiyan',
-    #'sc5992',
-    'qiutan6li']
+    'R6',
+    'R1',
+    'R7',
+    'R8']
 raters_by_region = {
     'ventral': ventral_raters,
     'dorsal': dorsal_raters,
