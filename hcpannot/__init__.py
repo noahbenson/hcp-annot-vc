@@ -17,9 +17,12 @@ from .core import (
 from .interface import (
     subject_data, ROITool,
     imgrid_to_flatmap, flatmap_to_imgrid)
-from .analysis import (plot_contours)
 from .io import (
     load_contours, load_traces, load_paths, load_labels, load_reports,
-    save_contours, save_traces, save_paths, save_labels, save_reports)
+    save_contours, save_traces, save_paths, save_labels, save_reports,
+    load_report, load_allreports,
+    plot_contours)
 
 from . import config
+from . import analysis
+

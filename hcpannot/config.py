@@ -94,6 +94,8 @@ labelkey_by_region = {
     'ventral': labelkey_ventral,
     'dorsal': labelkey_dorsal}
 labelkey = {k:v for d in labelkey_by_region.values() for (k,v) in d.items()}
+# Make lists of region names also:
+region_areas = {k: tuple(v.keys()) for (k,v) in labelkey_by_region.items()}
 
 # Raters -----------------------------------------------------------------------
 # The name used for the mean rater (the average of other raters).
