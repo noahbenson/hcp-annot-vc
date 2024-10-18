@@ -1,7 +1,7 @@
 version: '3'
 services:
    hcp-annotate:
-      build: .
+      image: nben/hcp-annot-vc:20230329
       ports:
          - "8888:8888"
       volumes:
