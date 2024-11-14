@@ -10,7 +10,7 @@
 import os, json
 from collections.abc import Mapping
 from pathlib import Path
-
+import pandas
 import numpy as np
 import neuropythy as ny
 
@@ -929,10 +929,13 @@ def load_report(region, rater, sid, h, reports_path=None):
     except Exception as e:
         pass
     return data
+
 def load_allreports(region,
                     reports_path=None,
                     include_mean=True,
-                    sids=subject_list):
+                    sids=None):
+    from .config import raters_by_region ## needs to be added 
+ 
     """Loads all reports for a region and returns a dataframe of them.
     
     This runs `load_report` over all raters, subjects, and hemispheres and
@@ -945,7 +948,7 @@ def load_allreports(region,
         include_mean = [include_mean]
     else:
         include_mean = []
-    raters = (region_raters[region] + include_mean)
+    raters = (raters_by_region[region] + include_mean) ## from region_raters to raters_by_region
     return pandas.DataFrame(
         [load_report(region, rater, sid, h, reports_path=reports_path)
          for rater in raters
