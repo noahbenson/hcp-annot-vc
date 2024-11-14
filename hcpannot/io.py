@@ -933,22 +933,22 @@ def load_report(region, rater, sid, h, reports_path=None):
 def load_allreports(region,
                     reports_path=None,
                     include_mean=True,
-                    sids=None):
-    from .config import raters_by_region ## needs to be added 
- 
+                    sids=None): 
     """Loads all reports for a region and returns a dataframe of them.
     
     This runs `load_report` over all raters, subjects, and hemispheres and
     returns a dataframe of all the reports. If a report file is not found,
     then the row is left with NaNs indicating missing data.
     """
+    from .config import raters_by_region 
+
     if include_mean:
         if include_mean == True:
             include_mean = 'mean'
         include_mean = [include_mean]
     else:
         include_mean = []
-    raters = (raters_by_region[region] + include_mean) ## from region_raters to raters_by_region
+    raters = (raters_by_region[region] + include_mean)
     return pandas.DataFrame(
         [load_report(region, rater, sid, h, reports_path=reports_path)
          for rater in raters
