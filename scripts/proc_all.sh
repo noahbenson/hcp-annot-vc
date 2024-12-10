@@ -5,7 +5,7 @@
 # scripts in order.
 
 # The raters we are running over:
-VENTRAL_RATERS=(bogengsong BrendaQiu JiyeongHa lindazelinzhao nourahboujaber jennifertepan)
+VENTRAL_RATERS=(bogengsong BrendaQiu JiyeongHa lindazelinzhao nourahboujaber)
 DORSAL_RATERS=(Annie-lsc BrendaQiu mominbashir oadesiyan qiutan6li)
 MEANRATER=mean
 # The input and output directories:
