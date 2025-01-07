@@ -1,7 +1,4 @@
-"""
-    Codes for averaging contours of the same subject among researchers
-    and plotting the contours on flatmaps
-    
+"""Averaging contours of the same subject among researchers and plotting the contours on flatmaps.
 """
 
 from hcpannot.proc import (proc, rigid_align_points)
@@ -13,76 +10,31 @@ from matplotlib.collections import LineCollection
 import numpy as np
 
 # list of raters
-raters = ventral_raters
-raters.append(meanrater)
+ventral_raters = ventral_raters + [meanrater]
 
 # generate a list of colors
 colors = ['r', 'g', 'b', 'c', 'm', 'k']
-rater_colors = {r: c for r, c in zip(raters, colors)}
-
-
-def nestget(d, k):
-    """Retrieves nested data from the proc dictionaries.
-    
-    Certain keys such as `'boundaries'` are accessible in the dictionaries that
-    are returned by the `proc` function only via the `'nested_data'` key, which
-    typically contains another proc dictionary with additional data. The
-    `nestget` function gets data from these embedded dictionaries.
-    """
-    while k not in d:
-        d = d['nested_data']
-    return d[k]
-
-def gen_contour_coords(rater, subject_id, hemi, contour, proc_path, contour_save_path, npoints=500):
-    """
-    Divide a contour of a given subject, rater, and hemisphere into a given number
-    (default 500) of points and save the coordinates.
-    """
-    
-    # check if the contour already exists, if so, skip the processing
-    cache_file = os.path.join(proc_path, 'fsaverage', f'cacherater_{rater}_{subject_id}_{hemi}_{contour}.mgz')
-    
-    data = proc('ventral', rater=rater, sid=subject_id, hemisphere=hemi, 
-               save_path=proc_path, load_path=contour_save_path)
-    
-    if contour != 'V3v': 
-        trace = data['traces'][contour]
-        # break the contour into evenly spaced points (default is 500)
-        coords = trace.curve.linspace(npoints)
-    
-    # V3v was not annotated by researchers in this project, and the data are stored differently
-    else:
-        v3v = nestget(data, 'v3v_contour')
-        v3v_curve = ny.curve_spline(v3v[0], v3v[1])
-        coords = v3v_curve.linspace(npoints)
-        
-    # align the points to fsaverage space
-    cortex = data['cortex']
-    fmap1 = data['flatmap']
-    fmap2 = ny.to_flatmap('occipital_pole', cortex)
-    addr = fmap1.address(coords)
-    coordinates = fmap2.unaddress(addr)
-    
-    return coordinates
+rater_colors = {r: c for r, c in zip(ventral_raters, colors)}
 
 def plot_contours(raters, subject_id, hemi, contours, 
-                  proc_path, contour_save_path, npoints=500, ax=None, lw=None, autogen=True):
+                  proc_path, contour_save_path, ax=None, lw=None, autogen=True):
+    """Plot contours of the same subject from different raters.
     """
-    Plot contours of the same subject from different raters on a flatmap. If the contours 
-    are not already saved, generate and save them.
-    """
+    
     # check if raters and contours are lists
     # if not, convert them to lists
-    if not isinstance(raters, list):
+    if not isinstance(raters, (tuple, list, np.ndarray)):
         raters = [raters]
         
-    if not isinstance(contours, list):
+    if not isinstance(contours, (tuple, list, np.ndarray)):
         contours = [contours]
-        
+    
+    # if no axis is provided, use the current axis    
     if ax is None:
         ax = plt.gca()
-        
-    raters_legend = set() # to avoid duplicate legend entries
+    
+    # to avoid duplicate legend entries
+    raters_legend = set() 
     
     for r in raters:
         for c in contours:
@@ -99,12 +51,13 @@ def plot_contours(raters, subject_id, hemi, contours,
             else:
                 if autogen:
                     print(f'Contour coordinates for {r} {subject_id} {hemi} {c} not found. Generating...')
-                    coords = gen_contour_coords(r, subject_id, hemi, c, proc_path, contour_save_path, npoints)
+                    dat = proc('ventral', rater=r, sid=subject_id, hemisphere=hemi, save_path=proc_path, load_path=contour_save_path)
+                    coords = dat['fsaverage_traces'][c].points
                     ny.save(cache_file, coords)
                 else:
                     print(f'Contour coordinates for {r} {subject_id} {hemi} {c} not found.')
-                    continue
-               
+                    continue            
+            
             # plot the contours 
             color = rater_colors.get(r, 'gray')
             
@@ -121,11 +74,10 @@ def plot_contours(raters, subject_id, hemi, contours,
 
 def create_LineCollection(sids, hemi, roi, space,
                           proc_path, rater, 
-                          lw=0.25, alpha=0.3, color=None):
+                          lw, alpha, color=None):
     
-    """
-        Create a LineCollection object for contours of the same ROI from the same
-        researcher from different subjects to be plotted together effectively
+    """Create a LineCollection object for contours of the same ROI from the same
+    researcher from different subjects to be plotted together effectively
     """
     
     missing_contour = [] # list of subjects for which the contour is missing
@@ -148,28 +100,26 @@ def create_LineCollection(sids, hemi, roi, space,
         else:
             # if the coordinates are not saved, add the subject to the missing list
             missing_contour.append(sid)
-            
+
     lc = LineCollection(lines, linewidths=lw, alpha=alpha, colors=color)
     return (lc, missing_contour)
 
 def plot_lc(sids, hemi, rois, space, proc_path, rater=meanrater,
-            plot_v123=False, meanlines=None, npoints=500,flatmap=True, 
+            plot_v123=False, meanlines=None, npoints=500, 
             ax=None, lw=0.25, alpha=0.3, colors=None):
-    """
-    Plot a LineCollection object on a flatmap. By default, the contours are plotted on
-    flatmap with the mean V1-V3 contours.
     
+    """Plot a LineCollection object on a flatmap. By default, the contours are plotted on
+    flatmap with the mean V1-V3 contours.
     """
     if ax is None:
-        fig, ax = plt.subplots(1,1, figsize=(3.5,3.5), dpi=1200)
+        _, ax = plt.subplots(1,1, figsize=(3.5,3.5), dpi=1200)
     
     if not isinstance(rois, list):
         rois = [rois]
         
     if plot_v123:
-        if meanlines is None:
-            print('Mean V1-V3 contours not provided.')
-            return
+        if meanlines is None or 'lh' not in meanlines.keys() or 'rh' not in meanlines.keys():
+            raise ValueError('Mean V1-V3 contours are not provided.')
         else:
             meanv123 = meanlines[hemi]
             for t in meanv123.keys():
@@ -182,8 +132,9 @@ def plot_lc(sids, hemi, rois, space, proc_path, rater=meanrater,
                         ax.plot(trace[0]-8, trace[1], 'k-') # shift the x coordinates by -8
     
     for roi in rois:
-        lc, missing_contour = create_LineCollection(sids, hemi, roi, space, proc_path, rater, 
-                                                    color=colors.get(roi, None))
+        lc, _ = create_LineCollection(sids, hemi, roi, space, proc_path, rater,
+                                                    lw = lw, alpha = alpha, color=colors.get(roi, None)) 
+
         ax.add_collection(lc)
         
     ax.set_title('Ventral Contours')
@@ -194,9 +145,9 @@ def plot_lc(sids, hemi, rois, space, proc_path, rater=meanrater,
     return
 
 def align_fsnative(sid, hemi, contours, rater, proc_path, npoints=500):
-    """
-        For a given subject in a given hemisphere delineated by a given rater,
-        align the contours to mean contours in the fsaverage space.
+    
+    """For a given subject in a given hemisphere delineated by a given rater,
+    align the contours to mean contours in the fsaverage space.
     """
     
     mean_coords = []
