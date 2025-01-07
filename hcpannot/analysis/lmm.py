@@ -9,8 +9,6 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import neuropythy as ny
 
-raters=ventral_raters
-
 def postprocess_result(result, native_aligned=False):
     '''
     Postprocess the result of the linear mixed-effects model. The function sets the variance explained by researchers to 0
@@ -21,27 +19,27 @@ def postprocess_result(result, native_aligned=False):
     
     for contour in ['hV4_outer', 'VO_outer']: 
         # the starting point of these two contours is the same for all researchers if fsaverage data is used
-        # therefore, the variance explained by researchers is conceptually 0 at data point 1
+        # therefore, the variance explained by researchers is conceptually 0 at data point 0
         
         for hemi in ['lh', 'rh']:
             
             if not native_aligned: # if fsaverage data is used
                 
-                # check if the result for data point 1 of the contour exists
-                exists = ((result['contour'] == contour) & (result['loc_on_contour'] == 1) & (result['hemi'] == hemi)).any()
+                # check if the result for data point 0 of the contour exists
+                exists = ((result['contour'] == contour) & (result['loc_on_contour'] == 0) & (result['hemi'] == hemi)).any()
 
                 if exists: 
                     # if the result exists, set the variance explained by researchers to 0
-                    result.loc[(result['contour']== contour) & (result['loc_on_contour']==1) & 
+                    result.loc[(result['contour'] == contour) & (result['loc_on_contour'] == 0) & 
                                    (result['hemi']==hemi), 'varex_rater'] = 0
                     # set the variance explained by subjects to 1
-                    result.loc[(result['contour']== contour) & (result['loc_on_contour']==1) & 
+                    result.loc[(result['contour'] == contour) & (result['loc_on_contour'] == 0) & 
                                    (result['hemi']==hemi), 'varex_sbj'] = 1
 
                 else:  
                     # if the result does not exist (e.g. model failed to converge), add a new row to the dataframe
                     # where the variance explained by researchers is 0 and the variance explained by subjects is 1
-                    new_row = pd.DataFrame([[0,1,hemi,contour,1]], columns=['varex_rater', 'varex_sbj', 
+                    new_row = pd.DataFrame([[0, 1, hemi,contour, 1]], columns=['varex_rater', 'varex_sbj', 
                                                                                 'hemi', 'contour', 'loc_on_contour'])
                     # append the new row to the dataframe
                     result=pd.concat([result,new_row], ignore_index=True)
@@ -62,11 +60,11 @@ def get_contour_data (result, contour): # get the data for a specific contour
     '''
 
     # create a dictionary to store the data
-    contour_data = defaultdict(lambda: defaultdict(list))
+    contour_data = defaultdict(dict)
     
     # get the contour data
-    lh_dat = result[(result['hemi']=='lh') & (result['contour']==contour)]
-    rh_dat = result[(result['hemi']=='rh') & (result['contour']==contour)]
+    lh_dat = result[(result['hemi'] == 'lh') & (result['contour'] == contour)]
+    rh_dat = result[(result['hemi'] == 'rh') & (result['contour'] == contour)]
 
     # get the variance explained by subjects and store the data in the dictionary
     contour_data['lh']['sbj'] = lh_dat['varex_sbj'].values
@@ -130,8 +128,7 @@ def lwplot(x, y, axes=None, fill=True, edgecolor=None, color=None, **kw):
     
 def plot_hmap(x, y, hemi, contour, lm_result, ax, cmap='hot', residual=False, max_var=None):
     
-    '''
-    Plot the heatmap of the variance explained by researchers or subjects
+    '''Plot the heatmap of the variance explained by researchers to 
     '''
     
     # get the data for the contour
@@ -139,17 +136,19 @@ def plot_hmap(x, y, hemi, contour, lm_result, ax, cmap='hot', residual=False, ma
         
     if not residual: # if not plotting the residual
         
-        # get the variance explained by researchers
+        # get the ratio of variance explained by researchers to variance explained by subjects
         var_r2s = data[hemi]['r2s_variance']
         
-        # get the variance explained by subjects
-        if max_var == None: # if max_var is not provided, use the maximum variance explained by researchers found in the data
+        # the maximum ratio of variances is needed to set the maximum value of the heatmap
+        # if not provided, the maximum value is set to the maximum of all values in the dataset
+        # which includes data of both hemispheres, so that the colorbar is consistent across hemispheres
+        if max_var == None: 
             max_var = max(lm_result['r2s_variance'])
 
         # plot the heatmap
         hmap = lwplot(x, y, axes=ax, cmap=cmap, vmin=0, vmax=max_var, color=var_r2s, lw=1+var_r2s*5)
 
-    if residual: # if plotting the residual
+    else: # if plotting the residual
         
         # get the residual
         residual = data['residual']
