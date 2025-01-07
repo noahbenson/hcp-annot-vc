@@ -16,8 +16,8 @@ ventral_raters = ventral_raters + [meanrater]
 colors = ['r', 'g', 'b', 'c', 'm', 'k']
 rater_colors = {r: c for r, c in zip(ventral_raters, colors)}
 
-def plot_contours(raters, subject_id, hemi, contours, 
-                  proc_path, contour_save_path, ax=None, lw=None, autogen=True):
+def plot_rater_contours(raters, subject_id, hemi, contours, 
+                  save_path, data_path, ax=None, lw=None):
     """Plot contours of the same subject from different raters.
     """
     
@@ -37,37 +37,31 @@ def plot_contours(raters, subject_id, hemi, contours,
     raters_legend = set() 
     
     for r in raters:
+        
+        # get the line color based on the rater
+        color = rater_colors.get(r, 'gray')
+        
         for c in contours:
             
-            # define cache file path
-            cache_file = os.path.join(proc_path, 'fsaverage', f'cacherater_{r}_{subject_id}_{hemi}_{c}.mgz')
-            
-            # check if the contour coordinates are already saved
-            # if the coordinates are already saved, load them
-            if os.path.isfile(cache_file):
-                coords = ny.load(cache_file)
-            
-            # if not, generate and save them
-            else:
-                if autogen:
-                    print(f'Contour coordinates for {r} {subject_id} {hemi} {c} not found. Generating...')
-                    dat = proc('ventral', rater=r, sid=subject_id, hemisphere=hemi, save_path=proc_path, load_path=contour_save_path)
-                    coords = dat['fsaverage_traces'][c].points
-                    ny.save(cache_file, coords)
-                else:
-                    print(f'Contour coordinates for {r} {subject_id} {hemi} {c} not found.')
-                    continue            
+            # get the coordinates of the contours
+            try:
+                dat = proc('ventral', rater=r, sid=subject_id, hemisphere=hemi, save_path=save_path, load_path=data_path)
+                coords = dat['fsaverage_traces'][c].points
+
+            except Exception as e:
+                print(f'Error processing contours: {e}')
             
             # plot the contours 
-            color = rater_colors.get(r, 'gray')
             
-            # plot the contours with the same color for the same rater
-            # and add the rater to the legend only once
+            # if the rater is not in the legend yet, add them to the legend
             if r not in raters_legend:
                 raters_legend.add(r)
                 ax.plot(coords[0], coords[1], color=color, lw=lw, label=f'{r}')
+            
+            # otherwise, plot without the label
             else:
                 ax.plot(coords[0], coords[1], color=color, lw=lw)    
+    
     ax.legend()
             
     return
