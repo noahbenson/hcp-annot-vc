@@ -60,23 +60,35 @@ def get_correlation_matrix(df):
     return corr_matrix, mask
 
 
-def heatmap_surface_area(df, mask=None, cmap="YlOrRd",
-                         annot=True, boundary_line=None, width=5, height=1, 
-                         fmt=".2f", vmin=0, vmax=1, save_path=None, **kwarg):
-    rc.update({'axes.labelpad': 20, 'figure.figsize':(width, height),'font.size' : 10})
-    utils.set_rcParams(rc)
-    sns.set_theme(context="notebook", style='ticks', rc=rc)
+def heatmap_surface_area(df, mask=None, ax=None, cmap="YlOrRd", font_scale=1,
+                         annot=True, boundary_line=None, width=5, height=1, cbar=True,
+                         fmt=".1f", vmin=0, vmax=1, save_path=None, rc=None, **kwarg):
+    sns.set_theme(context="notebook", style='ticks', rc=rc, font_scale=font_scale)
     if annot is True:
-        annot_kws = {"size": rc['font.size'] * 0.7}
+        annot_kws = {"size": rc['font.size']* font_scale * 0.6}
     else:
         annot_kws = None
     ax = sns.heatmap(df, mask=mask, 
-                     annot=annot, annot_kws=annot_kws, fmt=fmt,
+                     annot=annot, annot_kws=annot_kws, ax=ax, fmt=fmt, cbar=cbar,
                      cmap=cmap, vmin=vmin, vmax=vmax, cbar_kws={"shrink": .7},
                      linewidth=.3, square=True)
+    # Get current ticks and labels
+    yticks = ax.get_yticks()
+    yticklabels = [label.get_text() for label in ax.get_yticklabels()]
+
+    # Remove the first and the last xy tick and label
+    ax.set_yticks(yticks[1:])
+    ax.set_yticklabels(yticklabels[1:])
+    
+    xticks = ax.get_xticks()
+    xticklabels = [label.get_text() for label in ax.get_xticklabels()]
+
+    ax.set_xticks(xticks[:-1])
+    ax.set_xticklabels(xticklabels[:-1])
+
     if boundary_line is not None:
-        ax.hlines(boundary_line, ax.get_xlim()[0], (ax.get_xlim()[1]/2), color='blue', linewidth=2, linestyles='--'),
-        ax.vlines(boundary_line, (ax.get_ylim()[0]/2), ax.get_ylim()[0], color='blue', linewidth=2, linestyles='--')
+        ax.hlines(boundary_line, ax.get_xlim()[0], (ax.get_xlim()[1]/2), color='blue', linewidth=rc['xtick.major.width']*1.2, linestyles='--'),
+        ax.vlines(boundary_line, (ax.get_ylim()[0]/2), ax.get_ylim()[0], color='blue', linewidth=rc['xtick.major.width']*1.2, linestyles='--')
     if save_path is not None:
         parent_path = Path(save_path)
         if not os.path.exists(parent_path.parent.absolute()):
