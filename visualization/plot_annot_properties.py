@@ -104,12 +104,12 @@ def ax_violinplot_surface_area(ax, df, x, y, order,
     sns.despine(top=True, bottom=False, right=True)
     
     sns.set_theme(context='notebook', style='ticks', rc=rc)
-    grid = sns.violinplot(df, x=x, y=y, split=True,
-                           order=order,
+    ax = sns.violinplot(df, x=x, y=y, split=True,
+                           order=order, density_norm="width",
                            hue=hue, hue_order=hue_order, bw=bw,
                            palette=cmap, linewidth=linewidth, ax=ax, **kwargs)
 
-    return grid
+    return ax
 
 def violinplot_surface_area(df, x, y, x_order, hue='hemisphere', hue_order=['lh','rh'], split=True,
                             col=None, col_wrap=None, bw=.2, linewidth=0.5, font_size=11,
