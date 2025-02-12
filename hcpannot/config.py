@@ -112,7 +112,8 @@ dorsal_raters = [
     'R6',
     'R1',
     'R7',
-    'R8']
+    'R8',
+    'R9']
 raters_by_region = {
     'ventral': ventral_raters,
     'dorsal': dorsal_raters,

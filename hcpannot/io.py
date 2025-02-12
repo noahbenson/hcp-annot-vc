@@ -15,6 +15,7 @@ import numpy as np
 import neuropythy as ny
 
 from .config import (
+    subject_list,
     procdata,
     to_data_path)
 
