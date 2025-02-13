@@ -6,7 +6,7 @@ from tqdm.notebook import tqdm
 import time
 from glob import glob
 from hcpannot.proc import proc
-from hcpannot.analysis import meanrater
+from hcpannot.config import meanrater
 from hcpannot import (save_contours, load_contours)
 import seaborn as sns
 from pathlib import Path

@@ -54,9 +54,9 @@ def unmelt_lh_rh_rois(df, roi_list, id_vars=['sid','anatomist']):
     return wide_df
 
 
-def get_correlation_matrix(df):
+def get_correlation_matrix(df, k=0):
     corr_matrix = df.corr()
-    mask = np.triu(corr_matrix)
+    mask = np.triu(corr_matrix, k=k)
     return corr_matrix, mask
 
 
@@ -98,72 +98,142 @@ def heatmap_surface_area(df, mask=None, ax=None, cmap="YlOrRd", font_scale=1,
 
 
 def ax_violinplot_surface_area(ax, df, x, y, order, 
-                               cmap=None, 
+                               cmap=None, rc=None, ylabel=None,
                                hue='hemisphere', hue_order=['lh','rh'], 
                                split=True, bw=.2, linewidth=.5, **kwargs):
-    sns.despine(top=True, bottom=False, right=True)
-    
+    sns.despine(top=True, bottom=True, right=True, left=False)
     sns.set_theme(context='notebook', style='ticks', rc=rc)
     ax = sns.violinplot(df, x=x, y=y, split=True,
                            order=order, density_norm="width",
                            hue=hue, hue_order=hue_order, bw=bw,
                            palette=cmap, linewidth=linewidth, ax=ax, **kwargs)
-
+    if ylabel is not None:
+        ax.set(ylabel = ylabel)
     return ax
 
-def violinplot_surface_area(df, x, y, x_order, hue='hemisphere', hue_order=['lh','rh'], split=True,
-                            col=None, col_wrap=None, bw=.2, linewidth=0.5, font_size=11,
-                            width=3.14, height=3, cmap=sns.color_palette("Spectral"), save_path=None):
-    rc.update({'axes.labelpad': 10, 'figure.figsize':(width, height),'font.size' : font_size})
-    utils.set_rcParams(rc)
-    sns.set_theme(context="notebook", style='ticks', rc=rc)
-    print(rc)
-    sns.despine(top=True, bottom=True, right=True)
-    if 'percent' in y:
-        y_label = 'Relative surface area (%)'
-    elif 'mm2' in y:
-        y_label = r'Surface area ($mm^2$)'
-    grid = sns.FacetGrid(df,
-                         col=col, col_wrap=col_wrap,
-                         legend_out=True, 
-                         sharex=True, sharey=True)
-    grid = grid.map(sns.violinplot, x, y, hue,
-                    hue_order=hue_order, split=split, order=x_order, palette=cmap, cut=0,
-                    inner='box', linewidth=linewidth, saturation=0.9, bw=bw, edgecolor='black')
-    grid.add_legend(bbox_to_anchor=(1, 0.8))
-    grid.set_axis_labels('ROIs', y_label)
-    if col is not None:
-        for subplot_title, ax in grid.axes_dict.items():
-            ax.set_title(f"{subplot_title.title()}")
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def plot_violin_surface_area(plot_df, x='gender', y='percent', violin_rc=None, 
+                             rois=['V1', 'V2', 'V3', 'hV4', 'VO1', 'VO2'], 
+                             ylabel='Relative surface area (%)', save_path=None):
+    """
+    Plots violin plots for relative surface area of different ROIs,
+    with specific styling for hemisphere and gender differences.
+
+    Parameters:
+    - plot_df: DataFrame containing the data to plot. 
+    - x: column of plot_df that will be plotted on x axis,
+    - y: a column of plot_df that is plotted on y axis,
+    - violin_rc: Dictionary of parameters for the violin plot.
+    """
+    # Define color palettes
+    hemi_palette = sns.color_palette(["#6a0dad", "#2ca02c"])
+
+    # Create subplots
+    fig, axes = plt.subplots(1, 6, figsize=(7, 2.5), sharey=False)
+    fig.text(0.5, 0, "ROIs", ha="center")
+
+    # Loop through axes and ROIs to create plots
+    for ax, roi in zip(axes, rois):
+        tmp = plot_df.query('ROIs == @roi')
+
+        ax_violinplot_surface_area(ax=ax, df=tmp, rc=violin_rc, ylabel=ylabel,
+                                   hue='hemisphere', hue_order=['LH', 'RH'],
+                                   x=x, order=['M', 'F'], 
+                                   y=y, inner='stick',
+                                   bw=.2, fill=False,
+                                   cmap=hemi_palette, linewidth=0.5)
+
+        ax.legend_.remove()
+        ax.xaxis.label.set_visible(False)
+        ax.set_title(roi)
+        ax.set(ylim=[0, 2.5], yticks=[0, 0.5, 1, 1.5, 2, 2.5])
+        
+        grouped_medians = tmp.groupby(['gender','hemisphere'])['percent'].median().unstack()  # Compute median for each gender
+
+        # X-axis positions ('M' at 0, 'F' at 1), LH shifted slightly left, RH slightly right
+        x_offsets = {'LH': -0.1, 'RH': 0.1}  # Small offset to separate LH and RH dots
+        for gender, x_pos in zip(['M', 'F'], [0, 1]):
+            for hemisphere in ['LH', 'RH']:
+                if hemisphere in grouped_medians.columns:
+                    median_value = grouped_medians.loc[gender, hemisphere]
+                    ax.scatter(x_pos + x_offsets[hemisphere], median_value, 
+                               color='k', s=4, zorder=3)
+        
+    # Customize second to sixth subplot y-axis
+    for ax in axes[1:]:
+        ax.yaxis.set_ticks([])  # Remove y-axis ticks
+        ax.yaxis.label.set_visible(False)
+        ax.spines["left"].set_linestyle((0, (6, 10)))  # Custom dotted y-axis
+        ax.spines["left"].set_color("grey")  # Keep visible if needed
+        
+
+    # Adjust figure layout
+    plt.subplots_adjust(bottom=0.2)
+    
+
     if save_path is not None:
         parent_path = Path(save_path)
         if not os.path.exists(parent_path.parent.absolute()):
             os.makedirs(parent_path.parent.absolute())
         plt.savefig(save_path, bbox_inches='tight', transparent=True)
-    return grid
-    
-    grid.add_legend(title=hue.title(), bbox_to_anchor=(1, 0.87))
-    # for ax in grid.axes:
-    #     ax.tick_params(bottom=False)
-    if col is None:
-        grid.ax.tick_params(bottom=False)
-        for edge in range(df[x].nunique() * 3):
-            grid.ax.collections[edge].set_edgecolor('black')
-        for edge in range(df[x].nunique()):
-            grid.ax.get_children()[4 + (edge) * 5].set_color('black')
-            grid.ax.get_children()[5 + (edge) * 5].set_color('black')
+    return fig, axes 
 
-    else:
-        plt.subplots_adjust(hspace=0.2)
-        for subplot_title, ax in grid.axes_dict.items():
-            ax.set_title(subplot_title, pad=40)
-        for ax in grid.axes:
-            ax.title.set_position([.5, 2])
-            ax.tick_params(bottom=False)
-            for edge in range(df[x].nunique() * 3):
-                ax.collections[edge].set_edgecolor('black')
-            for edge in range(df[x].nunique()):
-                ax.get_children()[4 + (edge) * 5].set_color('black')
-                ax.get_children()[5 + (edge) * 5].set_color('black')
-    return grid
+
+
+# def violinplot_surface_area(df, x, y, x_order, hue='hemisphere', hue_order=['lh','rh'], split=True,
+#                             col=None, col_wrap=None, bw=.2, linewidth=0.5, font_size=11,
+#                             width=3.14, height=3, cmap=sns.color_palette("Spectral"), save_path=None):
+#     rc.update({'axes.labelpad': 10, 'figure.figsize':(width, height),'font.size' : font_size})
+#     utils.set_rcParams(rc)
+#     sns.set_theme(context="notebook", style='ticks', rc=rc)
+#     sns.despine(top=True, bottom=True, right=True)
+#     if 'percent' in y:
+#         y_label = 'Relative surface area (%)'
+#     elif 'mm2' in y:
+#         y_label = r'Surface area ($mm^2$)'
+#     grid = sns.FacetGrid(df,
+#                          col=col, col_wrap=col_wrap,
+#                          legend_out=True, 
+#                          sharex=True, sharey=True)
+#     grid = grid.map(sns.violinplot, x, y, hue,
+#                     hue_order=hue_order, split=split, order=x_order, palette=cmap, cut=0,
+#                     inner='box', linewidth=linewidth, saturation=0.9, bw=bw, edgecolor='black')
+#     grid.add_legend(bbox_to_anchor=(1, 0.8))
+#     grid.set_axis_labels('ROIs', y_label)
+#     if col is not None:
+#         for subplot_title, ax in grid.axes_dict.items():
+#             ax.set_title(f"{subplot_title.title()}")
+#     if save_path is not None:
+#         parent_path = Path(save_path)
+#         if not os.path.exists(parent_path.parent.absolute()):
+#             os.makedirs(parent_path.parent.absolute())
+#         plt.savefig(save_path, bbox_inches='tight', transparent=True)
+#     return grid
+    
+#     grid.add_legend(title=hue.title(), bbox_to_anchor=(1, 0.87))
+#     # for ax in grid.axes:
+#     #     ax.tick_params(bottom=False)
+#     if col is None:
+#         grid.ax.tick_params(bottom=False)
+#         for edge in range(df[x].nunique() * 3):
+#             grid.ax.collections[edge].set_edgecolor('black')
+#         for edge in range(df[x].nunique()):
+#             grid.ax.get_children()[4 + (edge) * 5].set_color('black')
+#             grid.ax.get_children()[5 + (edge) * 5].set_color('black')
+
+#     else:
+#         plt.subplots_adjust(hspace=0.2)
+#         for subplot_title, ax in grid.axes_dict.items():
+#             ax.set_title(subplot_title, pad=40)
+#         for ax in grid.axes:
+#             ax.title.set_position([.5, 2])
+#             ax.tick_params(bottom=False)
+#             for edge in range(df[x].nunique() * 3):
+#                 ax.collections[edge].set_edgecolor('black')
+#             for edge in range(df[x].nunique()):
+#                 ax.get_children()[4 + (edge) * 5].set_color('black')
+#                 ax.get_children()[5 + (edge) * 5].set_color('black')
+#     return grid
 
