@@ -114,7 +114,9 @@ def ax_violinplot_surface_area(ax, df, x, y, order,
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def plot_violin_surface_area(plot_df, x='gender', y='percent', violin_rc=None, 
+def plot_violin_surface_area(plot_df, x='gender', order=['M', 'F'], 
+                             y='percent', hue='hemisphere', 
+                             hue_order=['LH', 'RH'], rc=None, 
                              rois=['V1', 'V2', 'V3', 'hV4', 'VO1', 'VO2'], 
                              ylabel='Relative surface area (%)', save_path=None):
     """
@@ -133,14 +135,18 @@ def plot_violin_surface_area(plot_df, x='gender', y='percent', violin_rc=None,
     # Create subplots
     fig, axes = plt.subplots(1, 6, figsize=(7, 2.5), sharey=False)
     fig.text(0.5, 0, "ROIs", ha="center")
+    fig.text(0.165, 0.83 , "LH", fontsize=rc['font.size']*0.7, 
+             fontweight="bold", fontname='Arial', color=hemi_palette[0], ha="center")
+    fig.text(0.195, 0.83 , "RH", fontname='Arial', fontsize=rc['font.size']*0.7,
+             fontweight="bold", color=hemi_palette[1], ha="center")
 
     # Loop through axes and ROIs to create plots
     for ax, roi in zip(axes, rois):
         tmp = plot_df.query('ROIs == @roi')
 
-        ax_violinplot_surface_area(ax=ax, df=tmp, rc=violin_rc, ylabel=ylabel,
-                                   hue='hemisphere', hue_order=['LH', 'RH'],
-                                   x=x, order=['M', 'F'], 
+        ax_violinplot_surface_area(ax=ax, df=tmp, rc=rc, ylabel=ylabel,
+                                   hue=hue, hue_order=hue_order,
+                                   x=x, order=order, 
                                    y=y, inner='stick',
                                    bw=.2, fill=False,
                                    cmap=hemi_palette, linewidth=0.5)
@@ -150,16 +156,22 @@ def plot_violin_surface_area(plot_df, x='gender', y='percent', violin_rc=None,
         ax.set_title(roi)
         ax.set(ylim=[0, 2.5], yticks=[0, 0.5, 1, 1.5, 2, 2.5])
         
-        grouped_medians = tmp.groupby(['gender','hemisphere'])['percent'].median().unstack()  # Compute median for each gender
-
+        grouped = tmp.groupby([x,hue])[y]
+        grouped_medians = grouped.median().unstack()  # Compute median for each gender
+        # Compute and plot the interquartile range (IQR)
+        q1 = grouped.quantile(0.25).unstack()  # 25th percentile (Q1)
+        q3 = grouped.quantile(0.75).unstack()  # 75th percentile (Q3)    
         # X-axis positions ('M' at 0, 'F' at 1), LH shifted slightly left, RH slightly right
-        x_offsets = {'LH': -0.1, 'RH': 0.1}  # Small offset to separate LH and RH dots
-        for gender, x_pos in zip(['M', 'F'], [0, 1]):
-            for hemisphere in ['LH', 'RH']:
-                if hemisphere in grouped_medians.columns:
-                    median_value = grouped_medians.loc[gender, hemisphere]
-                    ax.scatter(x_pos + x_offsets[hemisphere], median_value, 
-                               color='k', s=4, zorder=3)
+        x_offsets = {hue_order[0]: -0.1, hue_order[1]: 0.1}  # Small offset to separate LH and RH dots
+        for gender, x_pos in zip(order, [0, 1]):
+            for hemisphere in hue_order:
+                median_value = grouped_medians.loc[gender, hemisphere]
+                ax.scatter(x_pos + x_offsets[hemisphere], median_value, 
+                           color='k', s=4, zorder=3)
+                lower = q1.loc[gender, hemisphere]
+                upper = q3.loc[gender, hemisphere]
+                ax.vlines(x_pos + x_offsets[hemisphere], 
+                          ymin=lower, ymax=upper, color='k', linewidth=0.5)
         
     # Customize second to sixth subplot y-axis
     for ax in axes[1:]:
@@ -170,7 +182,7 @@ def plot_violin_surface_area(plot_df, x='gender', y='percent', violin_rc=None,
         
 
     # Adjust figure layout
-    plt.subplots_adjust(bottom=0.2)
+    plt.subplots_adjust(bottom=0.15)
     
 
     if save_path is not None:
@@ -178,7 +190,7 @@ def plot_violin_surface_area(plot_df, x='gender', y='percent', violin_rc=None,
         if not os.path.exists(parent_path.parent.absolute()):
             os.makedirs(parent_path.parent.absolute())
         plt.savefig(save_path, bbox_inches='tight', transparent=True)
-    return fig, axes 
+    return grouped
 
 
 
