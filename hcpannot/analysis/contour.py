@@ -45,7 +45,9 @@ def plot_rater_contours(raters, subject_id, hemi, contours,
             
             # get the coordinates of the contours
             try:
-                dat = proc('ventral', rater=r, sid=subject_id, hemisphere=hemi, save_path=save_path, load_path=data_path)
+                dat = proc('ventral', rater=r, sid=subject_id, hemisphere=hemi, 
+                           save_path=save_path, load_path=data_path)
+                
                 coords = dat['fsaverage_traces'][c].points
 
             except Exception as e:
@@ -66,41 +68,36 @@ def plot_rater_contours(raters, subject_id, hemi, contours,
             
     return
 
-def create_LineCollection(sids, hemi, roi, space,
-                          proc_path, rater, 
-                          lw, alpha, color=None):
+def create_LineCollection(sids, hemi, roi, rater, 
+                          lw, alpha, save_path,
+                          data_path, color=None):
     
     """Create a LineCollection object for contours of the same ROI from the same
     researcher from different subjects to be plotted together effectively
     """
     
-    missing_contour = [] # list of subjects for which the contour is missing
     lines = [] # list of coordinates for each subject
     
     # for each subject, try to load the contour coordinates
     for sid in sids:
-        cache_file = os.path.join(proc_path, space, f'cacherater_{rater}_{sid}_{hemi}_{roi}.mgz')
         
-        # check if the contour coordinates are already saved
-        if os.path.isfile(cache_file):
-            
-            # if coordinates are saved, load them
-            coords = ny.load(cache_file)
-            
-            # x and y coordinates were saved as separate arrays (npoints * 2)
-            # stack them together to create a list of coordinates
+        try:
+            dat = proc(contours_plan='ventral', rater=rater, sid=sid, hemisphere=hemi, save_path=save_path, load_path=data_path)
+            coords = dat['fsaverage_traces'][roi].points
             lines.append(np.column_stack(coords))
+            
+        except Exception as e:
+            print(f'Error processing contours: {e}')
+            continue
         
-        else:
-            # if the coordinates are not saved, add the subject to the missing list
-            missing_contour.append(sid)
+        # add V1-V3 contours to the list of lines
 
     lc = LineCollection(lines, linewidths=lw, alpha=alpha, colors=color)
-    return (lc, missing_contour)
+    return lc
 
-def plot_lc(sids, hemi, rois, space, proc_path, rater=meanrater,
-            plot_v123=False, meanlines=None, npoints=500, 
-            ax=None, lw=0.25, alpha=0.3, colors=None):
+def plot_lc(sids, hemi, rois, save_path, data_path,
+            rater=meanrater, ax=None, lw=0.25, 
+            alpha=0.1, colors=None):
     
     """Plot a LineCollection object on a flatmap. By default, the contours are plotted on
     flatmap with the mean V1-V3 contours.
@@ -111,23 +108,25 @@ def plot_lc(sids, hemi, rois, space, proc_path, rater=meanrater,
     if not isinstance(rois, list):
         rois = [rois]
         
-    if plot_v123:
-        if meanlines is None or 'lh' not in meanlines.keys() or 'rh' not in meanlines.keys():
-            raise ValueError('Mean V1-V3 contours are not provided.')
-        else:
-            meanv123 = meanlines[hemi]
-            for t in meanv123.keys():
-                for c in meanv123[t]:
-                    trace = meanv123[t][c].curve.linspace(npoints)
+    # if plot_v123:
+    #     if meanlines is None or 'lh' not in meanlines.keys() or 'rh' not in meanlines.keys():
+    #         raise ValueError('Mean V1-V3 contours are not provided.')
+    #     else:
+    #         meanv123 = meanlines[hemi]
+    #         for t in meanv123.keys():
+    #             for c in meanv123[t]:
+    #                 trace = meanv123[t][c].curve.linspace(npoints)
                     
-                    if hemi == 'lh':
-                        ax.plot(trace[0]+8, trace[1], 'k-') # shift the x coordinates by 8
-                    else:
-                        ax.plot(trace[0]-8, trace[1], 'k-') # shift the x coordinates by -8
+    #                 if hemi == 'lh':
+    #                     ax.plot(trace[0]+8, trace[1], 'k-') # shift the x coordinates by 8
+    #                 else:
+    #                     ax.plot(trace[0]-8, trace[1], 'k-') # shift the x coordinates by -8
     
     for roi in rois:
-        lc, _ = create_LineCollection(sids, hemi, roi, space, proc_path, rater,
-                                                    lw = lw, alpha = alpha, color=colors.get(roi, None)) 
+        
+        lc = create_LineCollection(sids, hemi, roi, rater,
+                                    lw=lw, alpha=alpha, color=colors.get(roi, None),
+                                    save_path=save_path, data_path=data_path) 
 
         ax.add_collection(lc)
         
