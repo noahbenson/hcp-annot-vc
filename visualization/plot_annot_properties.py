@@ -8,19 +8,19 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from . import utils
 
-rc = {'text.color': 'black',
-      'axes.labelcolor': 'black',
-      'xtick.color': 'black',
-      'ytick.color': 'black',
-      'xtick.labelcolor': 'black',
-      'ytick.labelcolor': 'black',
-      'font.family': 'helveticaneue',
-      'font.weight': 'light',
-      'font.size' : 11,
-      'figure.dpi': 72*3,
-      'savefig.dpi': 72*4,
-      }
-mpl.rcParams.update(rc)
+base_rc = {'text.color': 'black',
+          'axes.labelcolor': 'black',
+          'xtick.color': 'black',
+          'ytick.color': 'black',
+          'xtick.labelcolor': 'black',
+          'ytick.labelcolor': 'black',
+          'font.family': 'helveticaneue',
+          'font.weight': 'light',
+          'font.size' : 11,
+          'figure.dpi': 72*3,
+          'savefig.dpi': 72*4,
+          }
+mpl.rcParams.update(base_rc)
 
 def calculate_percent(roi, cortex):
     return roi*100/cortex
@@ -98,14 +98,14 @@ def heatmap_surface_area(df, mask=None, ax=None, cmap="YlOrRd", font_scale=1,
 
 
 def ax_violinplot_surface_area(ax, df, x, y, order, 
-                               cmap=None, rc=None, ylabel=None,
+                               cmap=None, rc=None, ylabel=None, alpha=.8,
                                hue='hemisphere', hue_order=['lh','rh'], 
                                split=True, bw=.2, linewidth=.5, **kwargs):
     sns.despine(top=True, bottom=True, right=True, left=False)
     sns.set_theme(context='notebook', style='ticks', rc=rc)
     ax = sns.violinplot(df, x=x, y=y, split=True,
                            order=order, density_norm="width",
-                           hue=hue, hue_order=hue_order, bw=bw,
+                           hue=hue, hue_order=hue_order, bw=bw,alpha=alpha,
                            palette=cmap, linewidth=linewidth, ax=ax, **kwargs)
     if ylabel is not None:
         ax.set(ylabel = ylabel)
@@ -114,10 +114,12 @@ def ax_violinplot_surface_area(ax, df, x, y, order,
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def plot_violin_surface_area(plot_df, x='gender', order=['M', 'F'], 
-                             y='percent', hue='hemisphere', 
-                             hue_order=['LH', 'RH'], rc=None, 
-                             rois=['V1', 'V2', 'V3', 'hV4', 'VO1', 'VO2'], 
+def plot_violin_surface_area(plot_df, x, order, col, col_order,
+                             y='percent', bw=.5, 
+                             hue='hemisphere', hue_order=['LH', 'RH'], 
+                             rc=None, alpha=.8, iqr=True,
+                             figsize=(7, 2.5), hue_text_loc=(0.27,0.30),
+                             ylim=[0, 2.5], yticks=[0, 0.5, 1, 1.5, 2, 2.5],
                              ylabel='Relative surface area (%)', save_path=None):
     """
     Plots violin plots for relative surface area of different ROIs,
@@ -129,49 +131,52 @@ def plot_violin_surface_area(plot_df, x='gender', order=['M', 'F'],
     - y: a column of plot_df that is plotted on y axis,
     - violin_rc: Dictionary of parameters for the violin plot.
     """
+    if rc is None:
+        rc = base_rc
+ 
     # Define color palettes
     hemi_palette = sns.color_palette(["#6a0dad", "#2ca02c"])
 
     # Create subplots
-    fig, axes = plt.subplots(1, 6, figsize=(7, 2.5), sharey=False)
-    fig.text(0.5, 0, "ROIs", ha="center")
-    fig.text(0.165, 0.83 , "LH", fontsize=rc['font.size']*0.7, 
+    fig, axes = plt.subplots(1, len(col_order), figsize=figsize, sharey=False)
+    fig.text(0.5, 0, x.title(), ha="center")
+    fig.text(hue_text_loc[0], 0.83 , "LH", fontsize=rc['font.size']*0.7, 
              fontweight="bold", fontname='Arial', color=hemi_palette[0], ha="center")
-    fig.text(0.195, 0.83 , "RH", fontname='Arial', fontsize=rc['font.size']*0.7,
+    fig.text(hue_text_loc[1], 0.83, "RH", fontname='Arial', fontsize=rc['font.size']*0.7,
              fontweight="bold", color=hemi_palette[1], ha="center")
 
     # Loop through axes and ROIs to create plots
-    for ax, roi in zip(axes, rois):
-        tmp = plot_df.query('ROIs == @roi')
-
+    for ax, roi in zip(axes, col_order):
+        tmp = plot_df[plot_df[col] == roi]
         ax_violinplot_surface_area(ax=ax, df=tmp, rc=rc, ylabel=ylabel,
                                    hue=hue, hue_order=hue_order,
-                                   x=x, order=order, 
+                                   x=x, order=order, bw=bw,
                                    y=y, inner='stick',
-                                   bw=.2, fill=False,
+                                   fill=False, alpha=alpha,
                                    cmap=hemi_palette, linewidth=0.5)
 
         ax.legend_.remove()
         ax.xaxis.label.set_visible(False)
         ax.set_title(roi)
-        ax.set(ylim=[0, 2.5], yticks=[0, 0.5, 1, 1.5, 2, 2.5])
+        ax.set(ylim=ylim, yticks=yticks)
         
-        grouped = tmp.groupby([x,hue])[y]
-        grouped_medians = grouped.median().unstack()  # Compute median for each gender
-        # Compute and plot the interquartile range (IQR)
-        q1 = grouped.quantile(0.25).unstack()  # 25th percentile (Q1)
-        q3 = grouped.quantile(0.75).unstack()  # 75th percentile (Q3)    
-        # X-axis positions ('M' at 0, 'F' at 1), LH shifted slightly left, RH slightly right
-        x_offsets = {hue_order[0]: -0.1, hue_order[1]: 0.1}  # Small offset to separate LH and RH dots
-        for gender, x_pos in zip(order, [0, 1]):
-            for hemisphere in hue_order:
-                median_value = grouped_medians.loc[gender, hemisphere]
-                ax.scatter(x_pos + x_offsets[hemisphere], median_value, 
-                           color='k', s=4, zorder=3)
-                lower = q1.loc[gender, hemisphere]
-                upper = q3.loc[gender, hemisphere]
-                ax.vlines(x_pos + x_offsets[hemisphere], 
-                          ymin=lower, ymax=upper, color='k', linewidth=0.5)
+        if iqr is True:
+            grouped = tmp.groupby([x,hue])[y]
+            grouped_medians = grouped.median().unstack()  # Compute median for each gender
+            # Compute and plot the interquartile range (IQR)
+            q1 = grouped.quantile(0.25).unstack()  # 25th percentile (Q1)
+            q3 = grouped.quantile(0.75).unstack()  # 75th percentile (Q3)    
+            # X-axis positions ('M' at 0, 'F' at 1), LH shifted slightly left, RH slightly right
+            x_offsets = {hue_order[0]: -0.1, hue_order[1]: 0.1}  # Small offset to separate LH and RH dots
+            for gender, x_pos in zip(order, [0, 1]):
+                for hemisphere in hue_order:
+                    median_value = grouped_medians.loc[gender, hemisphere]
+                    ax.scatter(x_pos + x_offsets[hemisphere], median_value, 
+                               color='k', s=4, zorder=3)
+                    lower = q1.loc[gender, hemisphere]
+                    upper = q3.loc[gender, hemisphere]
+                    ax.vlines(x_pos + x_offsets[hemisphere], 
+                              ymin=lower, ymax=upper, color='k', linewidth=0.5)
         
     # Customize second to sixth subplot y-axis
     for ax in axes[1:]:
@@ -190,8 +195,86 @@ def plot_violin_surface_area(plot_df, x='gender', order=['M', 'F'],
         if not os.path.exists(parent_path.parent.absolute()):
             os.makedirs(parent_path.parent.absolute())
         plt.savefig(save_path, bbox_inches='tight', transparent=True)
-    return grouped
+    return fig, axes
 
+
+def each_researcher_violin_plot(plot_df, x='ROIs', y='percent', order=['hV4', 'VO', 'VO1', 'VO2'], 
+                                col='researcher', col_order=None,
+                                 hue='hemisphere', bw=.2,
+                                 hue_order=['LH', 'RH'], rc=None, alpha=.8, 
+                                 ylim=[0, 2.5], yticks=[0, 0.5, 1, 1.5, 2, 2.5],
+                                 ylabel='Relative surface area (%)', save_path=None):
+    """
+    Plots violin plots for relative surface area of different ROIs,
+    with specific styling for hemisphere and gender differences.
+
+    Parameters:
+    - plot_df: DataFrame containing the data to plot. 
+    - x: column of plot_df that will be plotted on x axis,
+    - y: a column of plot_df that is plotted on y axis,
+    - violin_rc: Dictionary of parameters for the violin plot.
+    """
+    # Define color palettes
+    hemi_palette = sns.color_palette(["#6a0dad", "#2ca02c"])
+
+    # Create subplots
+    fig, axes = plt.subplots(1, len(col_order), figsize=(7, 2.5), sharey=False)
+    fig.text(0.5, 0, "ROIs", ha="center")
+    fig.text(0.27, 0.83 , "LH", fontsize=rc['font.size']*0.7, 
+             fontweight="bold", fontname='Arial', color=hemi_palette[0], ha="center")
+    fig.text(0.30, 0.83 , "RH", fontname='Arial', fontsize=rc['font.size']*0.7,
+             fontweight="bold", color=hemi_palette[1], ha="center")
+
+    # Loop through axes and ROIs to create plots
+    for ax, roi in zip(axes, col_order):
+        tmp = plot_df[plot_df[col] == roi]
+        ax_violinplot_surface_area(ax=ax, df=tmp, rc=rc, ylabel=ylabel,
+                                   hue=hue, hue_order=hue_order,
+                                   x=x, order=order, bw=bw,
+                                   y=y, inner='stick',
+                                   fill=False, alpha=alpha,
+                                   cmap=hemi_palette, linewidth=0.5)
+
+        ax.legend_.remove()
+        ax.xaxis.label.set_visible(False)
+        ax.set_title(roi)
+        ax.set(ylim=ylim, yticks=yticks)
+        
+#         grouped = tmp.groupby([x,hue])[y]
+#         grouped_medians = grouped.median().unstack()  # Compute median for each gender
+#         # Compute and plot the interquartile range (IQR)
+#         q1 = grouped.quantile(0.25).unstack()  # 25th percentile (Q1)
+#         q3 = grouped.quantile(0.75).unstack()  # 75th percentile (Q3)    
+#         # X-axis positions ('M' at 0, 'F' at 1), LH shifted slightly left, RH slightly right
+#         x_offsets = {hue_order[0]: -0.1, hue_order[1]: 0.1}  # Small offset to separate LH and RH dots
+#         for gender, x_pos in zip(order, [0, 1]):
+#             for hemisphere in hue_order:
+#                 median_value = grouped_medians.loc[gender, hemisphere]
+#                 ax.scatter(x_pos + x_offsets[hemisphere], median_value, 
+#                            color='k', s=4, zorder=3)
+#                 lower = q1.loc[gender, hemisphere]
+#                 upper = q3.loc[gender, hemisphere]
+#                 ax.vlines(x_pos + x_offsets[hemisphere], 
+#                           ymin=lower, ymax=upper, color='k', linewidth=0.5)
+        
+    # Customize second to sixth subplot y-axis
+    for ax in axes[1:]:
+        ax.yaxis.set_ticks([])  # Remove y-axis ticks
+        ax.yaxis.label.set_visible(False)
+        ax.spines["left"].set_linestyle((0, (6, 10)))  # Custom dotted y-axis
+        ax.spines["left"].set_color("grey")  # Keep visible if needed
+        
+
+    # Adjust figure layout
+    plt.subplots_adjust(bottom=0.2)
+    
+
+    if save_path is not None:
+        parent_path = Path(save_path)
+        if not os.path.exists(parent_path.parent.absolute()):
+            os.makedirs(parent_path.parent.absolute())
+        plt.savefig(save_path, bbox_inches='tight', transparent=True)
+    return grouped
 
 
 # def violinplot_surface_area(df, x, y, x_order, hue='hemisphere', hue_order=['lh','rh'], split=True,
