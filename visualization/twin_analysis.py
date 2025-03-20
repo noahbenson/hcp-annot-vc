@@ -9,6 +9,7 @@ from itertools import product
 
 
 def calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi):
+    
     if hemi in ['lh', 'rh']:
         ratings = f'{hemi}_{roi}_percent'
     else:
@@ -32,6 +33,8 @@ def calculate_icc_for_all(long_twin_df, surface_area_df, twin_types, hemis, rois
     if save_path is not None and os.path.exists(save_path):
         return pd.read_hdf(save_path)
     else:
+        print(f'{save_path} doesn''t exist. calculating now...')
+              
         twin_icc_df = pd.DataFrame({})
         for twin_type, hemi, roi in tqdm(product(twin_types, hemis, rois)):
             result = calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi)
@@ -95,3 +98,11 @@ def bootstrap_calculate_icc_for_all(long_twin_df, surface_area_df, n_samples, n_
                 warnings.simplefilter('ignore', category=pd.io.pytables.PerformanceWarning)
                 twin_icc_df.to_hdf(save_path, key='df')
         return twin_icc_df
+    
+def calculate_confidential_interval(df, to_calculate, to_group=['ROI', 'hemi']):
+    ci_68_df = df.groupby(to_group)[to_calculate].apply(lambda x: [np.percentile(x, 16), np.percentile(x, 84)])
+    ci_68_df = ci_68_df.reset_index().rename(columns={to_calculate: f'{to_calculate}_ci_68'})
+    ci_95_df = df.groupby(to_group)[to_calculate].apply(lambda x: [np.percentile(x, 2.5), np.percentile(x, 97.5)])
+    ci_95_df = ci_95_df.reset_index().rename(columns={to_calculate: f'{to_calculate}_ci_95'})
+    ci_df = pd.merge(ci_68_df, ci_95_df, on=to_group)
+    return ci_df
