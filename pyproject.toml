@@ -1,0 +1,42 @@
+[project]
+name = "hcpannot"
+version = "0.1.0"
+description = """Library for annotating the Human Connectome Project Visual Cortex."""
+authors = [
+    {name="Noah C. Benson", email="nben@uw.edu"},
+    {name="Brenda Qiu", email="siyueq@uw.edu"},
+    {name="Jiyeong Ha", email="jiyeong.ha@nyu.edu"}]
+license = {"text"="MIT"}
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["neuroscience", "vision"]
+classifiers = [
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: MIT License',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
+    'Programming Language :: Python :: 3.13',
+    'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Information Analysis',
+    'Operating System :: Microsoft :: Windows',
+    'Operating System :: POSIX',
+    'Operating System :: Unix',
+    'Operating System :: MacOS']
+dependencies = [
+     'numpy >= 1.24.0',
+     'scipy >= 1.7.0',
+     'neuropythy >= 0.12.16',
+     'ipywidgets',
+     'matplotlib',
+     'pandas',
+     'seaborn',
+     'pingouin']
+
+[project.urls]
+homepage = "https://github.com/noahbenson/hcp-annov-vc"
+documentation = "https://github.com/noahbenson/hcp-annot-vc"
+repository = "https://github.com/noahbenson/hcp-annot-vc"
