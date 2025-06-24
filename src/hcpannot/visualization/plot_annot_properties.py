@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from . import utils
 
+
 base_rc = {'text.color': 'black',
           'axes.labelcolor': 'black',
           'xtick.color': 'black',
@@ -62,16 +63,16 @@ def get_correlation_matrix(df, k=0):
 
 def heatmap_surface_area(df, mask=None, ax=None, cmap="YlOrRd", font_scale=1,
                          annot=True, boundary_line=None, width=5, height=1, cbar=True,
-                         fmt=".1f", vmin=0, vmax=1, save_path=None, rc=None, **kwarg):
+                         fmt=".1f", vmin=0, vmax=1, save_path=None, rc=None, **kwargs):
     sns.set_theme(context="notebook", style='ticks', rc=rc, font_scale=font_scale)
     if annot is True:
-        annot_kws = {"size": rc['font.size']* font_scale * 0.6}
+        annot_kws = {"size": rc['font.size']* font_scale *.8}
     else:
         annot_kws = None
     ax = sns.heatmap(df, mask=mask, 
-                     annot=annot, annot_kws=annot_kws, ax=ax, fmt=fmt, cbar=cbar,
+                     annot=annot, annot_kws=annot_kws, ax=ax, fmt=fmt, cbar=cbar, 
                      cmap=cmap, vmin=vmin, vmax=vmax, cbar_kws={"shrink": .7},
-                     linewidth=.3, square=True)
+                     linewidth=.3, square=True, **kwargs)
     # Get current ticks and labels
     yticks = ax.get_yticks()
     yticklabels = [label.get_text() for label in ax.get_yticklabels()]
@@ -98,11 +99,12 @@ def heatmap_surface_area(df, mask=None, ax=None, cmap="YlOrRd", font_scale=1,
 
 
 def ax_violinplot_surface_area(ax, df, x, y, order, 
-                               cmap=None, rc=None, ylabel=None, alpha=.8,
+                               cmap=None, rc=None, ylabel=None, 
+                               alpha=.8,font_scale=1,
                                hue='hemisphere', hue_order=['lh','rh'], 
                                split=True, bw=.2, linewidth=.5, **kwargs):
     sns.despine(top=True, bottom=True, right=True, left=False)
-    sns.set_theme(context='notebook', style='ticks', rc=rc)
+    sns.set_theme(context='notebook', style='ticks', rc=rc, font_scale=font_scale)
     ax = sns.violinplot(df, x=x, y=y, split=True,
                            order=order, density_norm="width",
                            hue=hue, hue_order=hue_order, bw=bw,alpha=alpha,
@@ -111,13 +113,13 @@ def ax_violinplot_surface_area(ax, df, x, y, order,
         ax.set(ylabel = ylabel)
     return ax
 
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 def plot_violin_surface_area(plot_df, x, order, col, col_order,
-                             y='percent', bw=.5, 
+                             y='percent', bw=.5, font_scale=1,
                              hue='hemisphere', hue_order=['LH', 'RH'], 
-                             rc=None, alpha=.8, iqr=True,
+                             rc=None, alpha=.8, iqr=True, CoV=None,
+                             CoV_ypos=None,
                              figsize=(7, 2.5), hue_text_loc=(0.27,0.30),
                              ylim=[0, 2.5], yticks=[0, 0.5, 1, 1.5, 2, 2.5],
                              ylabel='Relative surface area (%)', save_path=None):
@@ -133,17 +135,18 @@ def plot_violin_surface_area(plot_df, x, order, col, col_order,
     """
     if rc is None:
         rc = base_rc
- 
     # Define color palettes
     hemi_palette = sns.color_palette(["#6a0dad", "#2ca02c"])
 
     # Create subplots
     fig, axes = plt.subplots(1, len(col_order), figsize=figsize, sharey=False)
+    
     fig.text(0.5, 0, x.title(), ha="center")
-    fig.text(hue_text_loc[0], 0.83 , "LH", fontsize=rc['font.size']*0.7, 
+    fig.text(hue_text_loc[0], 0.8 , "LH", fontsize=rc['font.size']*0.7, 
              fontweight="bold", fontname='Arial', color=hemi_palette[0], ha="center")
-    fig.text(hue_text_loc[1], 0.83, "RH", fontname='Arial', fontsize=rc['font.size']*0.7,
+    fig.text(hue_text_loc[1], 0.8, "RH", fontname='Arial', fontsize=rc['font.size']*0.7,
              fontweight="bold", color=hemi_palette[1], ha="center")
+
 
     # Loop through axes and ROIs to create plots
     for ax, roi in zip(axes, col_order):
@@ -158,7 +161,10 @@ def plot_violin_surface_area(plot_df, x, order, col, col_order,
         ax.legend_.remove()
         ax.xaxis.label.set_visible(False)
         ax.set_title(roi)
-        ax.set(ylim=ylim, yticks=yticks)
+        if ylim is not None:
+            ax.set(ylim=ylim)
+        if yticks is not None:
+            ax.set(yticks=yticks)
         
         if iqr is True:
             grouped = tmp.groupby([x,hue])[y]
@@ -168,15 +174,15 @@ def plot_violin_surface_area(plot_df, x, order, col, col_order,
             q3 = grouped.quantile(0.75).unstack()  # 75th percentile (Q3)    
             # X-axis positions ('M' at 0, 'F' at 1), LH shifted slightly left, RH slightly right
             x_offsets = {hue_order[0]: -0.1, hue_order[1]: 0.1}  # Small offset to separate LH and RH dots
-            for gender, x_pos in zip(order, [0, 1]):
+            for gender, x_pos in zip(order, range(len(order))):
                 for hemisphere in hue_order:
                     median_value = grouped_medians.loc[gender, hemisphere]
                     ax.scatter(x_pos + x_offsets[hemisphere], median_value, 
-                               color='k', s=4, zorder=3)
+                               color='k', s=2*font_scale, zorder=3)
                     lower = q1.loc[gender, hemisphere]
                     upper = q3.loc[gender, hemisphere]
                     ax.vlines(x_pos + x_offsets[hemisphere], 
-                              ymin=lower, ymax=upper, color='k', linewidth=0.5)
+                              ymin=lower, ymax=upper, color='k', linewidth=0.5*font_scale)
         
     # Customize second to sixth subplot y-axis
     for ax in axes[1:]:
@@ -185,10 +191,26 @@ def plot_violin_surface_area(plot_df, x, order, col, col_order,
         ax.spines["left"].set_linestyle((0, (6, 10)))  # Custom dotted y-axis
         ax.spines["left"].set_color("grey")  # Keep visible if needed
         
-
     # Adjust figure layout
     plt.subplots_adjust(bottom=0.15)
-    
+    if CoV is not None:
+        k = 0
+        for ax, roi in zip(axes, col_order):
+            for i, gender in enumerate(order):  # e.g., ['M', 'F']
+                x_pos = 0.25 + i * 0.5  # distribute text within the subplot
+                # Filter the CoV DataFrame
+                cov_val = CoV.query("ROIs == @roi and gender == @gender")['CoV']
+                if not cov_val.empty:
+                    cov_number = cov_val.values[0]
+                    if CoV_ypos is None:
+                        y_pos = 0.95
+                    else:
+                        y_pos = CoV_ypos[k]
+                    ax.text(x_pos, y_pos, f'{cov_number:.2f}',
+                            transform=ax.transAxes, ha='center', va='top',
+                            fontsize=rc['font.size']*0.65, color='black')
+                    k+=1
+
 
     if save_path is not None:
         parent_path = Path(save_path)
@@ -275,60 +297,4 @@ def each_researcher_violin_plot(plot_df, x='ROIs', y='percent', order=['hV4', 'V
             os.makedirs(parent_path.parent.absolute())
         plt.savefig(save_path, bbox_inches='tight', transparent=True)
     return grouped
-
-
-# def violinplot_surface_area(df, x, y, x_order, hue='hemisphere', hue_order=['lh','rh'], split=True,
-#                             col=None, col_wrap=None, bw=.2, linewidth=0.5, font_size=11,
-#                             width=3.14, height=3, cmap=sns.color_palette("Spectral"), save_path=None):
-#     rc.update({'axes.labelpad': 10, 'figure.figsize':(width, height),'font.size' : font_size})
-#     utils.set_rcParams(rc)
-#     sns.set_theme(context="notebook", style='ticks', rc=rc)
-#     sns.despine(top=True, bottom=True, right=True)
-#     if 'percent' in y:
-#         y_label = 'Relative surface area (%)'
-#     elif 'mm2' in y:
-#         y_label = r'Surface area ($mm^2$)'
-#     grid = sns.FacetGrid(df,
-#                          col=col, col_wrap=col_wrap,
-#                          legend_out=True, 
-#                          sharex=True, sharey=True)
-#     grid = grid.map(sns.violinplot, x, y, hue,
-#                     hue_order=hue_order, split=split, order=x_order, palette=cmap, cut=0,
-#                     inner='box', linewidth=linewidth, saturation=0.9, bw=bw, edgecolor='black')
-#     grid.add_legend(bbox_to_anchor=(1, 0.8))
-#     grid.set_axis_labels('ROIs', y_label)
-#     if col is not None:
-#         for subplot_title, ax in grid.axes_dict.items():
-#             ax.set_title(f"{subplot_title.title()}")
-#     if save_path is not None:
-#         parent_path = Path(save_path)
-#         if not os.path.exists(parent_path.parent.absolute()):
-#             os.makedirs(parent_path.parent.absolute())
-#         plt.savefig(save_path, bbox_inches='tight', transparent=True)
-#     return grid
-    
-#     grid.add_legend(title=hue.title(), bbox_to_anchor=(1, 0.87))
-#     # for ax in grid.axes:
-#     #     ax.tick_params(bottom=False)
-#     if col is None:
-#         grid.ax.tick_params(bottom=False)
-#         for edge in range(df[x].nunique() * 3):
-#             grid.ax.collections[edge].set_edgecolor('black')
-#         for edge in range(df[x].nunique()):
-#             grid.ax.get_children()[4 + (edge) * 5].set_color('black')
-#             grid.ax.get_children()[5 + (edge) * 5].set_color('black')
-
-#     else:
-#         plt.subplots_adjust(hspace=0.2)
-#         for subplot_title, ax in grid.axes_dict.items():
-#             ax.set_title(subplot_title, pad=40)
-#         for ax in grid.axes:
-#             ax.title.set_position([.5, 2])
-#             ax.tick_params(bottom=False)
-#             for edge in range(df[x].nunique() * 3):
-#                 ax.collections[edge].set_edgecolor('black')
-#             for edge in range(df[x].nunique()):
-#                 ax.get_children()[4 + (edge) * 5].set_color('black')
-#                 ax.get_children()[5 + (edge) * 5].set_color('black')
-#     return grid
 
