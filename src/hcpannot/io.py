@@ -10,14 +10,15 @@
 import os, json
 from collections.abc import Mapping
 from pathlib import Path
-
+import pandas 
 import numpy as np
 import neuropythy as ny
 
 from .config import (
     subject_list,
     procdata,
-    to_data_path)
+    to_data_path,
+    raters_by_region)
 
 
 # Utilities ####################################################################
@@ -946,7 +947,7 @@ def load_allreports(region,
         include_mean = [include_mean]
     else:
         include_mean = []
-    raters = (region_raters[region] + include_mean)
+    raters = (raters_by_region[region] + include_mean)
     return pandas.DataFrame(
         [load_report(region, rater, sid, h, reports_path=reports_path)
          for rater in raters
