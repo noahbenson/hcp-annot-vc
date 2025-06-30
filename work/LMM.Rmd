@@ -35,8 +35,14 @@ variance_explained <- function(lm.x, lm.y) {
 
 ```{r}
 # here the analysis is done for contours in fsaverage-space
-# the same was done for df_LMM_fsnative_aligned.csv, in which contour locations are in fsnative-aligned space.
-data <- read.csv('df_LMM.csv') 
+# the same analysis will be done for df_LMM_fsnative_aligned.csv, in which contour locations are in fsnative-aligned space.
+
+tryCatch({
+  data <- read.csv('df_LMM_average.csv') 
+}, error = function(e) {
+  stop("Please download the processed csv files separately from /hcp-annot-vc/work/lmm_dataframes and make sure the path above points to the correct file.")
+})
+
 data$subject_id <- factor(data$subject_id)
 data$rater <- factor(data$rater)
 data$rater_code <- factor (data$rater_code)
@@ -48,6 +54,7 @@ dat_test <- data[data$contour == 'VO_outer' & data$hemi == 'lh' & data$loc_on_co
 lm_test <- lmer(x_coord ~ 1 + (1|subject_id) + (1|rater), data=dat_test)
 lm.out <- summary(lm_test)
 lm.out
+
 ```
 
 ```{r}
@@ -102,11 +109,79 @@ for (hemi in c('lh', 'rh')) {
     }
   }
 }
+
+write.csv(result_df, file = 'lm_result_average.csv')
+
 ```
+
 
 ```{r}
-write.csv(result_df, file = 'lm_result.csv')
-```
+# run the same model for fsnative aligned data
 
+tryCatch({
+  data <- read.csv('df_LMM_native_aligned.csv') 
+}, error = function(e) {
+  stop("Please download the processed csv files separately from /hcp-annot-vc/work/lmm_dataframes and make sure the path above points to the correct file.")
+})
+
+data$subject_id <- factor(data$subject_id)
+data$rater <- factor(data$rater)
+data$rater_code <- factor (data$rater_code)
+
+# Create an empty dataframe to store results
+result_df <- data.frame(varex_rater_x = numeric(), varex_sbj_x = numeric(), varex_rater_y = numeric(), varex_sbj_y = numeric(), hemi = character(), contour = character(), loc_on_contour = numeric())
+
+# iterate over hemisphere
+for (hemi in c('lh', 'rh')) {
+  dat_hemi <- data[data$hemi == hemi,]
+  for (contour in c('hV4_outer', 'hV4_VO1', 'VO1_VO2', 'VO_outer')) {
+    dat_contour <- dat_hemi[dat_hemi$contour == contour,]
+    for (i in 0:49) {
+      dat_loc <- dat_contour[dat_contour$loc_on_contour == i,]
+      
+      # Print hemisphere, contour, and location on contour for debugging purposes
+      # cat("Processing hemi:", hemi, "contour:", contour, "loc_on_contour:", i, "\n")
+
+      # Try to fit the x model and handle potential errors
+      lm.x <- try(lmer('x_coord ~ 1 + (1|subject_id) + (1|rater_code)', data = dat_loc), silent = TRUE)
+      if (inherits(lm.x, "try-error")) {
+        cat("Error fitting x model at loc_on_contour", i, contour, hemi, "\n")
+        next # Skip to the next iteration if x model fails
+      }
+      
+      # get model summary
+      lm.xout <- summary(lm.x)
+      
+       # Try to fit the y model and handle potential errors
+      lm.y <- try(lmer('y_coord ~ 1 + (1|subject_id) + (1|rater_code)', data = dat_loc), silent = TRUE)
+      if (inherits(lm.y, "try-error")) {
+        cat("Error fitting y model at loc_on_contour", i, contour, hemi, "\n")
+        next # Skip to the next iteration if y model fails
+      }
+      
+      # get model summary
+      lm.yout <- summary(lm.y)
+      
+      # based on the model summary, calculate variance explained by subject, researcher, or residual
+      result <- variance_explained(lm.xout, lm.yout)
+ 
+      # store result in dataframe
+      result_df <- rbind(
+        result_df,
+        data.frame(
+          varex_rater = result$var_rater,
+          varex_sbj = result$var_subject,
+          hemi = hemi,
+          contour = contour,
+          loc_on_contour = i
+        )
+      )
+    }
+  }
+}
+
+write.csv(result_df, file = 'lm_result_native_aligned.csv')
+
+```
 
 
