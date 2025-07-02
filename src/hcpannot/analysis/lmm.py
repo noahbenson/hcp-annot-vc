@@ -194,6 +194,9 @@ def plot_lw (result, hemi, sub_contours, contour_save_path, proc_path, flatmap=T
     mean = proc('ventral', rater='mean', sid=999999, hemisphere=hemi, load_path=contour_save_path, save_path=proc_path)
     mean_traces = mean['traces']
     
+    # calculate rater to subject variance
+    r2s_variance = result['varex_rater']/result['varex_sbj']
+    
 
     # plot individual ventral contour
     for contour in sub_contours:
@@ -213,7 +216,7 @@ def plot_lw (result, hemi, sub_contours, contour_save_path, proc_path, flatmap=T
                             hemi=hemi, 
                             contour=contour, 
                             lm_result=result, 
-                            max_var=max(result['r2s_variance']),
+                            max_var=max(r2s_variance),
                             ax=ax)
 
     return hmap

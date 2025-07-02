@@ -17,8 +17,30 @@ colors = ['r', 'g', 'b', 'c', 'm', 'k']
 rater_colors = {r: c for r, c in zip(ventral_raters, colors)}
 
 def plot_rater_contours(raters, subject_id, hemi, contours, 
-                  save_path, data_path, ax=None, lw=None):
-    """Plot contours of the same subject from different raters.
+                  save_path, load_path, ax=None, lw=None):
+    
+    """Plot a subject's contours delineated by different raters.
+    
+    Parameters
+    ----------
+    raters : tuple, list, or np.ndarray
+        List of raters to plot contours for.
+    subject_id : int
+        Subject ID to plot contours for.
+    hemi : str
+        Hemisphere to plot contours for. Either 'lh' or 'rh'.
+    contours : tuple, list, or np.ndarray
+        List of contours to plot.
+    save_path : str
+        The path into which the various processed data are saved.
+    load_path : str
+        The path of the `save/` directory from the `hcp-annot-vc:data`
+        repository from which contours are loaded.
+    ax : matplotlib.axes.Axes, optional
+        The axes on which to plot the contours. If None, the current axes are used.
+    lw : float, optional
+        The line width of the contours. If None, the default line width is used.
+    
     """
     
     # check if raters and contours are lists
@@ -46,7 +68,7 @@ def plot_rater_contours(raters, subject_id, hemi, contours,
             # get the coordinates of the contours
             try:
                 dat = proc('ventral', rater=r, sid=subject_id, hemisphere=hemi, 
-                           save_path=save_path, load_path=data_path)
+                           save_path=save_path, load_path=load_path)
                 
                 coords = dat['fsaverage_traces'][c].points
 
