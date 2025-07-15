@@ -524,6 +524,24 @@ def forward_fsaverage_traces(nested_data):
         contours after projection to the fsaverage.
     """
     return (nested_data['fsaverage_traces'],)
+@pimms.calc('fsnative_traces')
+def forward_fsnative_traces(nested_data):
+    """Retrieve the `'fsnative_traces'` data from the `nested_data` initial
+    processing.
+    
+    Parameters
+    ----------
+    nested_data : dict-like
+        A dictionary of data from which the ouptuts are extracted. Nested data
+        dictionaries are used to introduce lazy logic to the pipelines.
+
+    Outputs
+    -------
+    fsnative_traces : dict
+        The neuropythy path-trace objects that represent the processed / cleaned
+        contours after alignment to the contours projected onto the fsaverage.
+    """
+    return (nested_data['fsnative_traces'],)
 @pimms.calc('paths')
 def forward_paths(nested_data):
     """Retrieve the `'paths'` data from the `nested_data` initial processing.
@@ -568,7 +586,8 @@ fwdplan_traces = pimms.plan(
     traces=forward_traces)
 fwdplan_fsaverage_traces = pimms.plan(
     fwdplan_traces,
-    fsaverage_traces=forward_fsaverage_traces)
+    fsaverage_traces=forward_fsaverage_traces,
+    fsnative_traces=forward_fsnative_traces)
 fwdplan_paths = pimms.plan(
     fwdplan_fsaverage_traces,
     paths=forward_paths)
@@ -665,6 +684,75 @@ def calc_fsaverage_traces(rater, sid, chirality, save_path,
                 filenames=region,
                 **io_options)
     return (fsa_traces,)
+@pimms.calc('fsnative_traces')
+def calc_fsnative_traces(region, rater, sid, chirality, save_path,
+                         fsaverage_traces, nested_data, io_options,
+                         npoints=500):
+    """Either loads the fsnative trace data that has been rigidly aligned from the
+    filesystem or retrieves it from the `nested_data` plan-data object.
+
+    Parameters
+    ----------
+    traces : dict
+        The traces that are to be fsaverage-aligned.
+    fsaverage_traces : dict
+        The fsaverage-aligned traces.
+    npoints : int, optional
+        The number of points that the fsaverage-aligned traces should contain.
+        The default is 500.
+    rater : str, optional
+        The name of the rater; if not provided, this defaults to the mean rater.
+    
+    Outputs
+    -------
+    fsnative_traces : dict
+        A dictionary of the fsnative-aligned contours. These contours will each
+        correspond to one of the drawn contours but will be subdivided into 500
+        evenly spaced points (like `fsaverage_traces`) and aligned to
+        `fsaverage_traces`.
+    """
+    h = chirality
+    overwrite = io_options['overwrite']
+    traces_path = os.path.join(save_path, 'fsnative_traces')
+    fsn_traces = None
+    if overwrite is not True:
+        # We try loading them and only calculate them if we aren't overwriting.
+        try:
+            fsn_traces = load_traces(
+                rater, sid, h, region,
+                load_path=traces_path)
+        except FileNotFoundError:
+            pass
+    if fsn_traces is None:
+        from ..config import contours_by_region
+        from .util import rigid_align_affine
+        traces = nested_data['traces']
+        contours = contours_by_region[region]
+        # We need to align all points to all points, not one trace at a time;
+        # the ideal way to do this is to use only the drawn traces.
+        drawn_fsn_points = np.hstack(
+            [traces[k].curve.linspace(npoints)
+             for k in contours])
+        drawn_fsa_points = np.hstack(
+            [fsaverage_traces[k].points
+             for k in contours])
+        (rot, x0) = rigid_align_affine(drawn_fsn_points, drawn_fsa_points)
+        # Now build up the fsnative_traces using the transformation.
+        fsn_traces = {}
+        for (k,tr) in traces.items():
+            mp = tr.map_projection
+            pts = tr.curve.linspace(npoints)
+            closed = tr.closed
+            fsn_traces[k] = ny.path_trace(mp, rot @ pts + x0, closed=closed)
+        # We don't try to save if overwrite is False because it will raise an
+        # unnecessary error.
+        if overwrite is not False:
+            save_traces(
+                rater, sid, h, fsn_traces,
+                save_path=traces_path,
+                filenames=region,
+                **io_options)
+    return (fsn_traces,)
 @pimms.calc('paths')
 def calc_paths(rater, sid, chirality, save_path,
                nested_data, cortex, io_options, region):
@@ -813,7 +901,8 @@ traces_plan = pimms.plan(
     traces=calc_fwdtraces)
 fsaverage_traces_plan = pimms.plan(
     fwdplan_traces,
-    fsaverage_traces=calc_fsaverage_traces)
+    fsaverage_traces=calc_fsaverage_traces,
+    fsnative_traces=calc_fsnative_traces)
 paths_plan = pimms.plan(
     fwdplan_fsaverage_traces,
     paths=calc_paths)

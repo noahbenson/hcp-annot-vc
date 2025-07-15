@@ -323,6 +323,51 @@ def rotation_align_points(a, b, weights=None, out=None):
     if out is not None:
         out = np.ascontiguousarray(out)
     return np.dot(rotation_matrix.astype(out.dtype), a, out=out)
+def rigid_align_affine(a, b, weights=None):
+    """Returns the affine transformation that rigidly aligns the matrix of points
+    `a` with the matrix of points `b`.
+
+    `rigid_align_affine(a, b)` calculates the alignment of the points in the
+    matrix `a` to those in the matrix `b` by first aligning the centroid of `a`
+    to that of `b` then finding the rotation matrix that minimizes the
+    differences between `a` and `b` using the Kabsch-Umeyama algorithm.
+
+    If `(R, x0) = rigid_align_affine(a, b)` then `R @ a + x0` is equal to
+    `rigid_align_points(a, b)`.
+
+    Parameters
+    ----------
+    a : matrix
+        The matrix that is to be aligned to matrix `b`. The shape of a can be
+        any shape `(d,n)` where `d` is the number of dimensions, and `n` is the
+        number of points.
+    b : matrix
+        The matrix to which `a` is to be aligned. Must be the same shape as `a`.
+    weights : vector or None, optional
+        The weights or masses to use in calculating the center of mass and the
+        covariance matrix. The default is `None`.
+    out : matrix or None, optional
+        Where to store the result. If `None` (the default), then a new array is
+        returned. Otherwise, the result is placed in `out`.
+
+    Returns
+    -------
+    rotation : numpy array
+        The affine transformation's rotation matrix.
+    translation : numpy array
+        The affine transformation's translation vector (represented as a column
+        vector).
+    """
+    # First, find the centroids.
+    centroid_a = centroid(a, weights=weights)[:,None]
+    centroid_b = centroid(b, weights=weights)[:,None]
+    # Find the rotation matrix.
+    rot = rotation_alignment_matrix(
+        a - centroid_a, b - centroid_b,
+        weights=weights)
+    # Find the translation vector:
+    trl = centroid_b - rot @ centroid_a
+    return (rot, trl)
 def rigid_align_points(a, b, weights=None, out=None):
     """Rigidly aligns the points in matrix `a` to the points in matrix `b`.
     
