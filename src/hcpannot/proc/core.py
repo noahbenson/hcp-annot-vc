@@ -686,7 +686,8 @@ def calc_fsaverage_traces(rater, sid, chirality, save_path,
     return (fsa_traces,)
 @pimms.calc('fsnative_traces')
 def calc_fsnative_traces(region, rater, sid, chirality, save_path,
-                         fsaverage_traces, nested_data, io_options,
+                         nested_data, io_options,
+                         fsnative_isflipped=None,
                          npoints=500):
     """Either loads the fsnative trace data that has been rigidly aligned from the
     filesystem or retrieves it from the `nested_data` plan-data object.
@@ -695,21 +696,31 @@ def calc_fsnative_traces(region, rater, sid, chirality, save_path,
     ----------
     traces : dict
         The traces that are to be fsaverage-aligned.
-    fsaverage_traces : dict
-        The fsaverage-aligned traces.
     npoints : int, optional
         The number of points that the fsaverage-aligned traces should contain.
         The default is 500.
     rater : str, optional
         The name of the rater; if not provided, this defaults to the mean rater.
+    fsnative_isflipped : function or None, optional
+        The function used to determine if the fsnative alignment needs to be
+        flipped.The alignment of the native contours into the fsnative contours
+        works by aligning the principal components of the traces to the standard
+        axes (i.e., the x and y axes). The algorithm will never reflect the data
+        in performing this operation, but it can rotate the data 180 degrees. To
+        detect this, the `fsnative_isflipped` function must return `True` when
+        given the `fsnative_traces` dictionary if the traces need to be
+        flipped. If `None` is given (the default), then the
+        `fsnative_isflipped_by_region[region]` value from `hcpannot.config` is
+        used.
     
     Outputs
     -------
     fsnative_traces : dict
         A dictionary of the fsnative-aligned contours. These contours will each
         correspond to one of the drawn contours but will be subdivided into 500
-        evenly spaced points (like `fsaverage_traces`) and aligned to
-        `fsaverage_traces`.
+        evenly spaced points (like `fsaverage_traces`) and aligned to its
+        principal components.
+
     """
     h = chirality
     overwrite = io_options['overwrite']
@@ -733,10 +744,7 @@ def calc_fsnative_traces(region, rater, sid, chirality, save_path,
         drawn_fsn_points = np.hstack(
             [traces[k].curve.linspace(npoints)
              for k in contours])
-        drawn_fsa_points = np.hstack(
-            [fsaverage_traces[k].points
-             for k in contours])
-        (rot, x0) = rigid_align_affine(drawn_fsn_points, drawn_fsa_points)
+        (rot, x0) = rigid_align_affine(drawn_fsn_points)
         # Now build up the fsnative_traces using the transformation.
         fsn_traces = {}
         for (k,tr) in traces.items():
@@ -744,6 +752,17 @@ def calc_fsnative_traces(region, rater, sid, chirality, save_path,
             pts = tr.curve.linspace(npoints)
             closed = tr.closed
             fsn_traces[k] = ny.path_trace(mp, rot @ pts + x0, closed=closed)
+        # If the rotation matrix happened to rotate the traces to be flipped
+        # from our expectation (i.e., 180-degrees from the way we usually
+        # visualize the sets), we want to flip them back so that some sets
+        # of contours aren't rotated opposite of others. We do this with the
+        # isflipped functions.
+        if fsnative_isflipped is None:
+            from ..config import fsnative_isflipped_by_region
+            fsnative_isflipped = fsnative_isflipped_by_region[region]
+        if fsnative_isflipped(fsn_traces):
+            for (k,v) in fsn_traces.items():
+                fsn_traces[k] = v.copy(points=-v.points)
         # We don't try to save if overwrite is False because it will raise an
         # unnecessary error.
         if overwrite is not False:

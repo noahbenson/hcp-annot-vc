@@ -157,6 +157,14 @@ traces_dorsal = {
     'IPS0': '{hemisphere}.IPS0_trace.json.gz',
     'LO1': '{hemisphere}.LO1_trace.json.gz'}
 
+# FSNative Alignment References ------------------------------------------------
+def fsnative_isflipped_ventral(traces):
+    (x,y) = traces['hV4_outer'].points
+    return y[0] < 0
+def fsnative_isflipped_dorsal(traces):
+    (x,y) = traces['LO1_outer'].points
+    return y[0] > 0
+
 # Paths and Boundaries ---------------------------------------------------------
 # And the important paths (which include boundaries).
 boundaries_ventral = {
@@ -251,6 +259,9 @@ contours_by_region = {
 traces_by_region = {
     'ventral': traces_ventral,
     'dorsal': traces_dorsal}
+fsnative_isflipped_by_region = {
+    'ventral': fsnative_isflipped_ventral,
+    'dorsal':  fsnative_isflipped_dorsal}
 boundaries_by_region = {
     'ventral': boundaries_ventral,
     'dorsal': boundaries_dorsal}
@@ -295,13 +306,14 @@ paths_by_region_meansub = {
     'dorsal': paths_dorsal_meansub}
 region_procdata = {
     k: {
-        'raters':     raters_by_region.get(k),
-        'contours':   contours_by_region.get(k),
-        'traces':     traces_by_region.get(k),
-        'boundaries': boundaries_by_region.get(k),
-        'paths':      paths_by_region.get(k),
-        'labels':     labels_by_region.get(k),
-        'reports':    reports_by_region.get(k)}
+        'raters':             raters_by_region.get(k),
+        'contours':           contours_by_region.get(k),
+        'traces':             traces_by_region.get(k),
+        'fsnative_isflipped': fsnative_isflipped_by_region.get(k),
+        'boundaries':         boundaries_by_region.get(k),
+        'paths':              paths_by_region.get(k),
+        'labels':             labels_by_region.get(k),
+        'reports':            reports_by_region.get(k)}
     for k in ('ventral', 'dorsal')}
 region_procdata.update(
     {f'{k}_meanrater': {

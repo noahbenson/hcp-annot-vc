@@ -268,7 +268,22 @@ def centroid_align_points(a, b, weights=None, out=None):
         out[...] = a
     out += (centroid_b - centroid_a)[:,None]
     return out
-def rotation_alignment_matrix(a, b, weights=None):
+def _matrix_pcs(x, weights):
+    cov = np.cov(x, aweights=weights)
+    # Next, calculate the eigenvalues:
+    (vals, vecs) = np.linalg.eig(cov)
+    ii = np.argsort(vals)[::-1]
+    vecs = vecs[:, ii]
+    sdet = np.sign(np.linalg.det(vecs))
+    if sdet == -1:
+        d = np.eye(len(x), dtype=np.asarray(x).dtype)
+        d[-1,-1] = -1
+        vecs = np.dot(vecs, d)
+    sgn = np.sign(vecs)
+    if np.sum(sgn) < np.sum(-sgn):
+        vecs = -vecs
+    return vecs
+def rotation_alignment_matrix(a, b=None, weights=None):
     """Returns the rotation matrix that, when applied to `a`, aligns `a` to `b`.
     
     `rotation_alignment_matrix(a, b)` returns the rotation matrix that aligns
@@ -278,20 +293,15 @@ def rotation_alignment_matrix(a, b, weights=None):
     `rotation_alignment_matrix(a, b, w)` uses `w` as a weight matrix such that
     the return value minimizes the weighted difference between `a` and `b`.
     """
-    # First calculate the covariance matrix.
-    if weights is None:
-        cov = np.dot(b, np.transpose(a))
+    a = np.asarray(a)
+    d = a.shape[0]
+    # First calculate the PCs for both a and b.
+    a_vecs = _matrix_pcs(a, weights)
+    if b is None:
+        b_vecs = np.eye(d, dtype=a.dtype)
     else:
-        weights = np.asarray(weights)
-        cov = np.dot(b * weights[None,:], np.transpose(a))
-        cov /= np.sum(weights)
-    # Next, calculate the singular value decomposition.
-    (u,s,vt) = np.linalg.svd(cov, compute_uv=True)
-    det_u = np.linalg.det(u)
-    det_v = np.linalg.det(vt)
-    d = np.eye(len(a), dtype=np.asarray(a).dtype)
-    d[-1,-1] = np.sign(det_v * det_u)
-    return np.dot(np.dot(u, d), vt)
+        b_vecs = _matrix_pcs(b, weights)
+    return (np.linalg.inv(b_vecs) @ a_vecs).T
 def rotation_align_points(a, b, weights=None, out=None):
     """Aligns the centroid of matrix `a` to that of `b` using rotation.
     
@@ -323,7 +333,7 @@ def rotation_align_points(a, b, weights=None, out=None):
     if out is not None:
         out = np.ascontiguousarray(out)
     return np.dot(rotation_matrix.astype(out.dtype), a, out=out)
-def rigid_align_affine(a, b, weights=None):
+def rigid_align_affine(a, b=None, weights=None):
     """Returns the affine transformation that rigidly aligns the matrix of points
     `a` with the matrix of points `b`.
 
@@ -339,16 +349,17 @@ def rigid_align_affine(a, b, weights=None):
     ----------
     a : matrix
         The matrix that is to be aligned to matrix `b`. The shape of a can be
-        any shape `(d,n)` where `d` is the number of dimensions, and `n` is the
-        number of points.
-    b : matrix
-        The matrix to which `a` is to be aligned. Must be the same shape as `a`.
+        any shape `(d,n)` where `d` is the number of dimensions in each point,
+        and `n` is the number of points.
+    b : matrix or None, optional
+        The matrix to which `a` is to be aligned. Must have the same number of
+        dimensions as `a` unless the ``None`` is given. If ``None`` is given,
+        then `a` is instead rotated such that its principal components align
+        with the cartesian axes and its centroid is translated to the origin.
+        The default is ``None``.
     weights : vector or None, optional
         The weights or masses to use in calculating the center of mass and the
         covariance matrix. The default is `None`.
-    out : matrix or None, optional
-        Where to store the result. If `None` (the default), then a new array is
-        returned. Otherwise, the result is placed in `out`.
 
     Returns
     -------
@@ -360,11 +371,14 @@ def rigid_align_affine(a, b, weights=None):
     """
     # First, find the centroids.
     centroid_a = centroid(a, weights=weights)[:,None]
-    centroid_b = centroid(b, weights=weights)[:,None]
+    a = a - centroid_a
+    if b is None:
+        centroid_b = np.zeros_like(centroid_a)
+    else:
+        centroid_b = centroid(b, weights=weights)[:,None]
+        b = b - centroid_b
     # Find the rotation matrix.
-    rot = rotation_alignment_matrix(
-        a - centroid_a, b - centroid_b,
-        weights=weights)
+    rot = rotation_alignment_matrix(a, b, weights=weights)
     # Find the translation vector:
     trl = centroid_b - rot @ centroid_a
     return (rot, trl)
