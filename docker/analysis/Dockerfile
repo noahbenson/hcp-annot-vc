@@ -2,7 +2,7 @@
 # annotation project.
 
 # We start with scipy notebook.
-FROM jupyter/scipy-notebook:python-3.10.6
+FROM quay.io/jupyter/datascience-notebook:python-3.11.10
 
 # Note the Maintainer.
 MAINTAINER Noah C. Benson <nben@uw.edu>
@@ -13,5 +13,7 @@ USER $NB_USER
 # We start by building a conda environment. We use mamba because it's faster.
 COPY environment.yml /opt/conda/analysis_base.env.yml
 RUN mamba env update --file /opt/conda/analysis_base.env.yml
+
+RUN R -e 'install.packages("lme4", repos="http://cran.us.r-project.org")'
 
 # That's all!
