@@ -19,6 +19,7 @@ from .config import (
     procdata,
     to_data_path,
     raters_by_region)
+from .core import nestget
 
 
 # Utilities ####################################################################
