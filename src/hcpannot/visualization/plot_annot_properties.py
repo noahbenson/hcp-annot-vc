@@ -8,20 +8,24 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from . import utils
 
-
-base_rc = {'text.color': 'black',
-          'axes.labelcolor': 'black',
-          'xtick.color': 'black',
-          'ytick.color': 'black',
-          'xtick.labelcolor': 'black',
-          'ytick.labelcolor': 'black',
-          'font.family': 'helveticaneue',
-          'font.weight': 'light',
-          'font.size' : 11,
-          'figure.dpi': 72*3,
-          'savefig.dpi': 72*4,
-          }
-mpl.rcParams.update(base_rc)
+rc = {'text.color': 'black',
+      'axes.labelcolor': 'black',
+      'axes.labelweight': 'light',
+      'axes.linewidth':     0.8,
+      'xtick.major.width':    0.8,
+      'ytick.major.width':    0.8,
+      'xtick.color': 'black',
+      'ytick.color': 'black',
+      'xtick.labelcolor': 'black',
+      'ytick.labelcolor': 'black',
+      'font.family': 'helveticaneue',
+      'font.weight': 'light',
+      'font.size' : 10,
+      'figure.dpi': 72*3,
+      'savefig.dpi': 72*4,
+      }
+mpl.rcParams.update(rc)
+mpl.rcParams['axes.unicode_minus'] = False
 
 def calculate_percent(roi, cortex):
     return roi*100/cortex
@@ -113,7 +117,17 @@ def ax_violinplot_surface_area(ax, df, x, y, order,
         ax.set(ylabel = ylabel)
     return ax
 
-
+def ax_boxplot_surface_area(ax, df, x, y, order, 
+                           cmap=None, rc=None, ylabel=None, 
+                           alpha=.8,font_scale=1,
+                           hue='hemisphere', hue_order=['lh','rh'], 
+                           linewidth=.5, **kwargs):
+    sns.despine(top=True, bottom=True, right=True, left=False)
+    sns.set_theme(style='ticks', rc=rc, font_scale=font_scale)
+    ax = sns.boxplot(df, x=x, y=y, order=order, **kwargs)
+    if ylabel is not None:
+        ax.set(ylabel = ylabel)
+    return ax
 
 def plot_violin_surface_area(plot_df, x, order, col, col_order,
                              y='percent', bw=.5, font_scale=1,
@@ -135,16 +149,18 @@ def plot_violin_surface_area(plot_df, x, order, col, col_order,
     """
     if rc is None:
         rc = base_rc
+    
+    sns.set_theme(style='ticks', rc=rc, font_scale=font_scale)
     # Define color palettes
     hemi_palette = sns.color_palette(["#6a0dad", "#2ca02c"])
 
     # Create subplots
     fig, axes = plt.subplots(1, len(col_order), figsize=figsize, sharey=False)
     
-    fig.text(0.5, 0, x.title(), ha="center")
-    fig.text(hue_text_loc[0], 0.8 , "LH", fontsize=rc['font.size']*0.7, 
+    #sfig.text(0.5, 0, x.title(), ha="center")
+    fig.text(hue_text_loc[0], 0.8 , "LH", fontsize=9, 
              fontweight="bold", fontname='Arial', color=hemi_palette[0], ha="center")
-    fig.text(hue_text_loc[1], 0.8, "RH", fontname='Arial', fontsize=rc['font.size']*0.7,
+    fig.text(hue_text_loc[1], 0.8, "RH", fontname='Arial', fontsize=9,
              fontweight="bold", color=hemi_palette[1], ha="center")
 
 
@@ -208,7 +224,7 @@ def plot_violin_surface_area(plot_df, x, order, col, col_order,
                         y_pos = CoV_ypos[k]
                     ax.text(x_pos, y_pos, f'{cov_number:.2f}',
                             transform=ax.transAxes, ha='center', va='top',
-                            fontsize=rc['font.size']*0.65, color='black')
+                            fontsize=rc['font.size']*0.8, color='black')
                     k+=1
 
 
@@ -216,7 +232,7 @@ def plot_violin_surface_area(plot_df, x, order, col, col_order,
         parent_path = Path(save_path)
         if not os.path.exists(parent_path.parent.absolute()):
             os.makedirs(parent_path.parent.absolute())
-        plt.savefig(save_path, bbox_inches='tight', transparent=True)
+        plt.savefig(save_path, transparent=True)
     return fig, axes
 
 

@@ -8,7 +8,7 @@ from tqdm import tqdm
 from itertools import product
 
 
-def calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi):
+def calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi, icc_type=2):
     
     if hemi in ['lh', 'rh']:
         ratings = f'{hemi}_{roi}_percent'
@@ -18,15 +18,16 @@ def calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi):
     tmp_cols = ['sid', ratings]
     tmp = long_twin_df.query('twin_type == @twin_type')
     tmp = tmp.merge(surface_area_df[tmp_cols], on='sid')
+    icc_type = f'ICC{icc_type}'
     result = pg.intraclass_corr(data=tmp, 
                                 targets='twin_index', 
                                 raters='sid_type', 
                                 ratings=ratings, 
-                                nan_policy='omit').query('Type == "ICC1"')
+                                nan_policy='omit').query('Type == @icc_type')
     result = result.drop(columns={'Type','Description'})
     result['hemi'] = [hemi]
     result['ROI'] = [roi]
-    result['twin_type'] = [twin_type]
+    result['twin_type'] = [twin_type] 
     return result
 
 def calculate_icc_for_all(long_twin_df, surface_area_df, twin_types, hemis, rois, save_path=None):
