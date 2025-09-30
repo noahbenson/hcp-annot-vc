@@ -8,29 +8,31 @@ from tqdm import tqdm
 from itertools import product
 
 
-def calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi, icc_type=2):
+def calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi, icc_type):
     
     if hemi in ['lh', 'rh']:
         ratings = f'{hemi}_{roi}_percent'
-    else:
+    elif hemi == 'sum':
         ratings = f'{roi}_percent'
         surface_area_df[ratings] = surface_area_df[f'lh_{ratings}'] + surface_area_df[f'rh_{ratings}']
     tmp_cols = ['sid', ratings]
     tmp = long_twin_df.query('twin_type == @twin_type')
     tmp = tmp.merge(surface_area_df[tmp_cols], on='sid')
-    icc_type = f'ICC{icc_type}'
+    icc = f'ICC{icc_type}'
     result = pg.intraclass_corr(data=tmp, 
                                 targets='twin_index', 
                                 raters='sid_type', 
                                 ratings=ratings, 
-                                nan_policy='omit').query('Type == @icc_type')
-    result = result.drop(columns={'Type','Description'})
+                                nan_policy='omit')
+    result = result.query('Type == @icc')
+    result = result.drop(columns={'Description'})
     result['hemi'] = [hemi]
     result['ROI'] = [roi]
     result['twin_type'] = [twin_type] 
     return result
 
-def calculate_icc_for_all(long_twin_df, surface_area_df, twin_types, hemis, rois, save_path=None):
+def calculate_icc_for_all(long_twin_df, surface_area_df, twin_types, hemis, rois, icc_type, save_path=None):
+    
     if save_path is not None and os.path.exists(save_path):
         return pd.read_hdf(save_path)
     else:
@@ -38,7 +40,7 @@ def calculate_icc_for_all(long_twin_df, surface_area_df, twin_types, hemis, rois
               
         twin_icc_df = pd.DataFrame({})
         for twin_type, hemi, roi in tqdm(product(twin_types, hemis, rois)):
-            result = calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi)
+            result = calculate_icc(long_twin_df, surface_area_df, twin_type, hemi, roi, icc_type)
             twin_icc_df = pd.concat((twin_icc_df, result), ignore_index=True)
     # Ignore PyTables PerformanceWarning
         if save_path is not None:
@@ -74,7 +76,7 @@ def filter_nan_and_unrelated_pairs(twin_df, sampled_surface_area_df):
     filtered_df = filtered_df[filtered_df['twin_index'].isin(filtered_counts.index)]
     return filtered_df
 
-def bootstrap_calculate_icc_for_all(long_twin_df, surface_area_df, n_samples, n_bootstraps, hemi, roi, save_path=None):
+def bootstrap_calculate_icc_for_all(long_twin_df, surface_area_df, n_samples, n_bootstraps, hemi, roi, icc_type=2, save_path=None):
     if save_path is not None and os.path.exists(save_path):
         return pd.read_hdf(save_path)
     else:
@@ -84,9 +86,9 @@ def bootstrap_calculate_icc_for_all(long_twin_df, surface_area_df, n_samples, n_
         twin_icc_df = pd.DataFrame({})
         for i in tqdm(range(n_bootstraps)):
             bts_tmp_df = sample_with_condition(filtered_df, n_samples, min_count=10)
-            mono_result = calculate_icc(bts_tmp_df, surface_area_df, 'monozygotic_twins', hemi, roi)
+            mono_result = calculate_icc(bts_tmp_df, surface_area_df, 'monozygotic_twins', hemi, roi, icc_type)
             mono_result = mono_result.rename(columns={'ICC': 'mono_ICC'})
-            dizy_result = calculate_icc(bts_tmp_df, surface_area_df, 'dizygotic_twins', hemi, roi)
+            dizy_result = calculate_icc(bts_tmp_df, surface_area_df, 'dizygotic_twins', hemi, roi, icc_type)
             dizy_result = dizy_result.rename(columns={'ICC': 'dizy_ICC'})
             bts_df = pd.concat((mono_result, dizy_result['dizy_ICC']), axis=1)
             bts_df['bootstrap'] = i
