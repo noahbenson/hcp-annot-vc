@@ -58,16 +58,13 @@ def proc(contours_plan, **kw):
         The HCP subject-ID of the subject to load. Although this parameter is
         an optional named parameter, it is required by the various plans and so
         must be provided.
-    load_path : str, optional
-        The path of the `save/` directory from the `hcp-annot-vc:data`
-        repository from which contours are loaded. Although this parameter is an
-        optional named parameter, it is required by the various plans and so
-        must be provided.
-    save_path : str, optional
-        The path into which the various processed data are saved. This should be
-        a directory, and the data are saved into subdirectories named `traces`,
-        `paths`, `labels`, etc. Although this parameter is an optional named
-        parameter, it is required by the various plans and so must be provided.
+    data_path : str, optional
+        The path from which contour and processed data should be loaded, and, if
+        those data are not already found, into which they are saved. This should
+        be a directory, and the data are saved into subdirectories named
+        `contours` at minimum and which will contain `traces`, `paths`,
+        `labels`, etc. Although this parameter is an optional named parameter,
+        it is required by the various plans and so must be provided.
     overwrite : boolean or None, optional
         Whether to overwrite files when processing data. If `True`, then all
         processing is repeated and new files are exported. If `False`, then no
@@ -125,14 +122,14 @@ def proc(contours_plan, **kw):
         if 'region' not in kw:
             kw['region'] = contours_plan
         contours_plan = cp
-    save_path = kw.pop('save_path')
+    data_path = kw['data_path']
     contours_data = contours_plan(**kw)
-    traces_data = traces_plan(nested_data=contours_data, save_path=save_path)
+    traces_data = traces_plan(nested_data=contours_data, data_path=data_path)
     fsatraces_data = fsaverage_traces_plan(
-        nested_data=traces_data, save_path=save_path)
-    paths_data = paths_plan(nested_data=fsatraces_data, save_path=save_path)
-    labels_data = labels_plan(nested_data=paths_data, save_path=save_path)
-    reports_data = reports_plan(nested_data=labels_data, save_path=save_path)
+        nested_data=traces_data, data_path=data_path)
+    paths_data = paths_plan(nested_data=fsatraces_data, data_path=data_path)
+    labels_data = labels_plan(nested_data=paths_data, data_path=data_path)
+    reports_data = reports_plan(nested_data=labels_data, data_path=data_path)
     return reports_data
 def allproc(contours_plan, **kw):
     """Processes one or all of the given plans and returns a dataframe.
@@ -202,11 +199,6 @@ def proc_meanrater(contours_plan, **kw):
      * If the `contours_plan` argument is a string like `'ventral'` that does
        not start with `'mean'`, then `'mean'` is prepended to it. The same is
        true of the `region` parameter.
-     * The `load_path` option, if not provided, defaults to the subdirectory
-       `traces` of the `save_path`, under the assumption that the processing
-       for the individual raters and for the mean contours are using the same
-       output directory.
-
     """
     from ..config import (procdata, meanrater)
     from .core import (
@@ -228,18 +220,15 @@ def proc_meanrater(contours_plan, **kw):
     reg = kw.get('region', None)
     if isinstance(reg, str) and not reg.endswith('_meanrater'):
         kw['region'] = reg + '_meanrater'
-    save_path = kw['save_path']
-    load_path = kw.get('load_path', None)
-    if load_path is None:
-        kw['load_path'] = save_path
+    data_path = kw['data_path']
     # Run and nest the plans.
     contours_data = contours_plan(**kw)
-    traces_data = traces_plan(nested_data=contours_data, save_path=save_path)
+    traces_data = traces_plan(nested_data=contours_data, data_path=data_path)
     fsatraces_data = fsaverage_traces_plan(
-        nested_data=traces_data, save_path=save_path)
-    paths_data = paths_plan(nested_data=fsatraces_data, save_path=save_path)
-    labels_data = labels_plan(nested_data=paths_data, save_path=save_path)
-    reports_data = reports_plan(nested_data=labels_data, save_path=save_path)
+        nested_data=traces_data, data_path=data_path)
+    paths_data = paths_plan(nested_data=fsatraces_data, data_path=data_path)
+    labels_data = labels_plan(nested_data=paths_data, data_path=data_path)
+    reports_data = reports_plan(nested_data=labels_data, data_path=data_path)
     return reports_data
 def allproc_meanrater(contours_plan, **kw):
     """Processes one or all of the given mean plans and returns a dataframe.
@@ -307,10 +296,6 @@ def proc_meansub(contours_plan, **kw):
      * If the `contours_plan` argument is a string like `'ventral'` that does
        not end with `'_meansub'`, then `'_meansub'` is appended to it. The same
        is true of the `region` parameter.
-     * The `load_path` option, if not provided, defaults to the subdirectory
-       `fsaverage_traces` of the `save_path`, under the assumption that the
-       processing for the individual raters and for the mean contours are using
-       the same output directory.
     """
     from ..config import (procdata, meansid)
     from .core import (
@@ -332,18 +317,15 @@ def proc_meansub(contours_plan, **kw):
     reg = kw.get('region', None)
     if isinstance(reg, str) and not reg.endswith('_meansub'):
         kw['region'] = reg + '_meansub'
-    save_path = kw['save_path']
-    load_path = kw.get('load_path', None)
-    if load_path is None:
-        kw['load_path'] = save_path
+    data_path = kw['data_path']
     # Run and nest the plans.
     contours_data = contours_plan(**kw)
-    traces_data = traces_plan(nested_data=contours_data, save_path=save_path)
+    traces_data = traces_plan(nested_data=contours_data, data_path=data_path)
     fsatraces_data = fsaverage_traces_plan(
-        nested_data=traces_data, save_path=save_path)
-    paths_data = paths_plan(nested_data=fsatraces_data, save_path=save_path)
-    labels_data = labels_plan(nested_data=paths_data, save_path=save_path)
-    reports_data = reports_plan(nested_data=labels_data, save_path=save_path)
+        nested_data=traces_data, data_path=data_path)
+    paths_data = paths_plan(nested_data=fsatraces_data, data_path=data_path)
+    labels_data = labels_plan(nested_data=paths_data, data_path=data_path)
+    reports_data = reports_plan(nested_data=labels_data, data_path=data_path)
     return reports_data
 def allproc_meansub(contours_plan, **kw):
     """Processes one or all of the given mean plans and returns a dataframe.

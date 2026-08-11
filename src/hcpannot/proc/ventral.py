@@ -26,9 +26,9 @@ from ..config import (
     meansid,
     procdata)
 from ..io import (
+    save_paths,
     save_contours, load_contours,
     save_traces,   load_traces,
-    save_paths,    load_paths,
     save_labels,   load_labels,
     save_reports,  load_reports)
 from .core import (

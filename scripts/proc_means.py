@@ -2,11 +2,12 @@
 ################################################################################
 
 import os
+from pathlib import Path
+
 import pandas as pd
 
 import hcpannot
 import hcpannot.cmd as hcpa_cmd
-
 from hcpannot.mp import (makejobs, mprun)
 from hcpannot.proc import (allproc_meanrater, allproc_meansub)
 
@@ -25,8 +26,7 @@ if raters is None:
 sids = hcpa_conf.sids
 hemis = hcpa_conf.hemis
 opts = hcpa_conf.opts
-save_path = hcpa_conf.opts['save_path']
-load_path = hcpa_conf.opts['load_path']
+data_path = Path(hcpa_conf.opts['data_path'])
 overwrite = hcpa_conf.opts['overwrite']
 if overwrite is False:
     overwrite = None
@@ -40,8 +40,7 @@ if region not in ('ventral', 'dorsal'):
 # First, we do the mean rater --------------------------------------------------
 # Make the job list.
 opts = dict(
-    save_path=save_path,
-    load_path=load_path,
+    data_path=data_path,
     overwrite=overwrite,
     source_raters=raters)
 def call_allproc_meanrater(sid, h):
@@ -57,8 +56,7 @@ df_rater = pd.concat(dfs_rater)
 
 # Next, do the mean subject ----------------------------------------------------
 opts = dict(
-    save_path=save_path,
-    load_path=load_path,
+    data_path=data_path,
     overwrite=overwrite,
     source_sids=sids)
 def call_allproc_meansub(rater, h):
@@ -71,9 +69,12 @@ dfs_sub = mprun(
     onfail=firstarg,
     onokay=firstarg)
 df_sub = pd.concat(dfs_sub)
-
 df = pd.concat([df_rater, df_sub])
+
+logs_path = data_path / 'logs'
+if not logs_path.is_dir():
+    logs_path.mkdir(exist_ok=True, parents=True)
 df.to_csv(
-    os.path.join(save_path, f'proc_mean{region}.tsv'),
+    logs_path / f'proc_mean{region}.tsv',
     sep='\t',
     index=False)

@@ -76,7 +76,7 @@ def calc_parse_chirality(hemisphere):
     """
     return ny.to_hemi_str(hemisphere.split('_')[0])
 @pimms.calc('contours')
-def calc_load_contours(rater, sid, chirality, load_path, region):
+def calc_load_contours(rater, sid, chirality, data_path, region):
     """Load the contours for a rater, subject, and hemisphere.
     
     Parameters
@@ -87,9 +87,9 @@ def calc_load_contours(rater, sid, chirality, load_path, region):
         The HCP subject-ID of the subject to load.
     chirality : 'lh' or 'rh'
         The hemisphere (`'lh'` or `'rh'`) to load.
-    load_path : str
-        The path of the `save/` directory from the `hcp-annot-vc:data`
-        repository.
+    data_path : str
+        The path containing the annotation data. This directory should be
+        organized as on the OSF repository for the project.
     region : str
         The region name for the contours being loaded.
 
@@ -102,7 +102,7 @@ def calc_load_contours(rater, sid, chirality, load_path, region):
     contour_filenames = procdata(region, 'contours')
     contours = load_contours(
         rater, sid, chirality, contour_filenames,
-        load_path=load_path)
+        load_path=(data_path / 'contours'))
     return (contours,)
 @pimms.calc('cortex')
 def calc_load_cortex(sid, hemisphere, chirality):
@@ -187,7 +187,7 @@ def calc_fsaverage_flatmap(cortex, fsaverage_mapproj):
     """
     return (ny.to_flatmap(fsaverage_mapproj, cortex),)
 @pimms.calc('contours')
-def calc_meanrater_contours(sid, chirality, load_path, save_path, region,
+def calc_meanrater_contours(sid, chirality, data_path, region,
                             io_options, npoints=500, min_raters=3,
                             source_raters=None, rater=meanrater):
     """Load or calculate the contours for the mean rater.
@@ -198,15 +198,9 @@ def calc_meanrater_contours(sid, chirality, load_path, save_path, region,
         The HCP subject-ID of the subject to load.
     chirality : 'lh' or 'rh'
         The hemisphere (`'lh'` or `'rh'`) to load.
-    load_path : str
-        The path where the individual raters' traces have been stored. If the
-        trace files are stored in a directory corresponding to
-        `{rootpath}/traces/{rater}/{sid}/` then the provided `load_path` should
-        me `{rootpath}/traces/`.
-    save_path : directory name
-        The directory to which this set of contours, traces, and other products
-        should be saved. Traces themselves are saved into a directory equivalen
-        to `os.path.join(save_path, rater, str(sid))`.
+    data_path : str
+        The path containing the annotation data. This directory should be
+        organized as on the OSF repository for the project.
     region : str
         The region name for the contours being loaded.
     source_raters : sequence of str or None, optional
@@ -225,55 +219,56 @@ def calc_meanrater_contours(sid, chirality, load_path, save_path, region,
         A persistent dictionary of contours; the keys are the contour names,
         and the values are the average contours across raters.
     """
+    rater0 = rater
     h = chirality
     overwrite = io_options.get('overwrite', None)
     if source_raters is None:
         source_raters = procdata(region, 'raters')
     # We first want to try to load them.
     contour_filenames = procdata(region, 'contours')
-    means_path = os.path.join(save_path, 'means')
-    traces_path = os.path.join(save_path, 'traces')
+    means_path = data_path / 'means'
+    traces_path = data_path / 'traces'
     contours = None
     if overwrite is not True:
         try:
             contours = load_contours(
                 rater, sid, chirality, contour_filenames,
-                load_path=means_path)
+                load_path=(data_path / 'contours'))
+            return (contours,)
         except FileNotFoundError:
             pass
-    if contours is None:
-        # We need to load the traces, calculate the contours, then save them.
-        if source_raters is None:
-            from .config import raters_by_region
-            source_raters = raters_by_region[region]
-        source_traces = procdata(region, 'sources')
-        traces = {}
-        for rater in source_raters:
-            try:
-                traces[rater] = load_traces(
-                    rater, sid, h, source_traces,
-                    load_path=traces_path)
-            except FileNotFoundError:
-                pass
-        if len(traces) < min_raters:
-            raise RuntimeError(
-                f"not enough raters ({len(traces)} found for contours")
-        # We have loaded enough traces; now we average them into contours.
-        contours = {}
-        for name in source_traces.keys():
-            trs = [
-                trace_set[name].curve.linspace(npoints)
-                for (rater,trace_set) in traces.items()]
-            contours[name] = np.mean(trs, axis=0)
-        if overwrite is not False:
-            save_contours(
-                meanrater, sid, h, contours,
-                save_path=means_path,
-                filenames=region,
-                **io_options)
+    # We need to load the traces, calculate the contours, then save them.
+    if source_raters is None:
+        from .config import raters_by_region
+        source_raters = raters_by_region[region]
+    source_traces = procdata(region, 'sources')
+    traces = {}
+    for rater in source_raters:
+        try:
+            traces[rater] = load_traces(
+                rater, sid, h, source_traces,
+                load_path=traces_path)
+        except FileNotFoundError:
+            pass
+    if len(traces) < min_raters:
+        raise RuntimeError(
+            f"not enough raters ({len(traces)} found for contours")
+    # We have loaded enough traces; now we average them into contours.
+    contours = {}
+    for name in source_traces.keys():
+        trs = [
+            trace_set[name].curve.linspace(npoints)
+            for (rater,trace_set) in traces.items()]
+        contours[name] = np.mean(trs, axis=0)
+    if overwrite is not False:
+        save_contours(
+            rater0, sid, h, contours,
+            save_path=data_path,
+            filenames=region,
+            **io_options)
     return (contours,)
 @pimms.calc('contours')
-def calc_meansub_contours(rater, chirality, load_path, save_path,
+def calc_meansub_contours(rater, chirality, data_path,
                           region, io_options, npoints=500,
                           source_sids=None, sid=None):
     """Load or calculate the contours for the mean rater.
@@ -284,15 +279,9 @@ def calc_meansub_contours(rater, chirality, load_path, save_path,
         The rater whose subjects are being averaged.
     chirality : 'lh' or 'rh'
         The hemisphere (`'lh'` or `'rh'`) to load.
-    load_path : str
-        The path where the individual raters' traces have been stored. If the
-        trace files are stored in a directory corresponding to
-        `{rootpath}/traces/{rater}/{sid}/` then the provided `load_path` should
-        me `{rootpath}/traces/`.
-    save_path : directory name
-        The directory to which this set of contours, traces, and other products
-        should be saved. Traces themselves are saved into a directory equivalen
-        to `os.path.join(save_path, rater, str(sid))`.
+    data_path : str
+        The path containing the annotation data. This directory should be
+        organized as on the OSF repository for the project.
     region : str
         The region name for the contours being loaded.
     source_sids : sequence of int or None, optional
@@ -318,46 +307,45 @@ def calc_meansub_contours(rater, chirality, load_path, save_path,
         from ..config import subject_list as source_sids
     if sid is None:
         sid = meansid
+    sid0 = sid
     # We first want to try to load them.
     contour_filenames = procdata(region, 'contours')
-    means_path = os.path.join(save_path, 'means')
-    fsatraces_path = os.path.join(save_path, 'fsaverage_traces')
+    contours_path = data_path / 'contours'
+    fsatraces_path = data_path / 'fsaverage_traces'
     contours = None
-    loaded = False
     if overwrite is not True:
         try:
             contours = load_contours(
                 rater, sid, chirality, contour_filenames,
-                load_path=means_path)
-            loaded = True
+                load_path=contours_path)
+            return (contours,)
         except FileNotFoundError:
             pass
-    if contours is None:
-        # We need to load the traces, calculate the contours, then save them.
-        if source_sids is None:
-            from .config import subject_list as source_sids
-        source_traces = procdata(region, 'sources')
-        traces = {}
-        for sid in source_sids:
-            try:
-                traces[sid] = load_traces(
-                    rater, sid, h, source_traces,
-                    load_path=fsatraces_path)
-            except FileNotFoundError:
-                pass
-        # We have loaded enough traces; now we average them into contours.
-        contours = {}
-        for name in source_traces.keys():
-            trs = [
-                trace_set[name].curve.linspace(npoints)
-                for (rater,trace_set) in traces.items()]
-            contours[name] = np.mean(trs, axis=0)
-        if overwrite is not False or not loaded:
-            save_contours(
-                rater, meansid, h, contours,
-                save_path=means_path,
-                filenames=region,
-                **io_options)
+    # We need to load the traces, calculate the contours, then save them.
+    if source_sids is None:
+        from .config import subject_list as source_sids
+    source_traces = procdata(region, 'sources')
+    traces = {}
+    for sid in source_sids:
+        try:
+            traces[sid] = load_traces(
+                rater, sid, h, source_traces,
+                load_path=fsatraces_path)
+        except FileNotFoundError:
+            pass
+    # We have loaded enough traces; now we average them into contours.
+    contours = {}
+    for name in source_traces.keys():
+        trs = [
+            trace_set[name].curve.linspace(npoints)
+            for (rater,trace_set) in traces.items()]
+        contours[name] = np.mean(trs, axis=0)
+    if overwrite is not False:
+        save_contours(
+            rater, sid0, h, contours,
+            save_path=contours_path,
+            filenames=region,
+            **io_options)
     return (contours,)
 
 
@@ -598,14 +586,14 @@ fwdplan_labels = pimms.plan(
 
 # Loading/processing ----------------------------------------------------------
 @pimms.calc('traces')
-def calc_fwdtraces(rater, sid, chirality, save_path,
+def calc_fwdtraces(rater, sid, chirality, data_path,
                    nested_data, io_options, region):
     """Either loads the trace data from the filesystem or retrieves it from the
     `nested_data` plan-data object.
     """
     h = chirality
     overwrite = io_options['overwrite']
-    traces_path = os.path.join(save_path, 'traces')
+    traces_path = data_path / 'traces'
     traces = None
     if overwrite is not True:
         # We try loading them and only calculate them if we aren't overwriting.
@@ -625,7 +613,7 @@ def calc_fwdtraces(rater, sid, chirality, save_path,
                 **io_options)
     return (traces,)
 @pimms.calc('fsaverage_traces')
-def calc_fsaverage_traces(rater, sid, chirality, save_path,
+def calc_fsaverage_traces(rater, sid, chirality, data_path,
                           nested_data, io_options, region,
                           npoints=500):
     """Either loads the fsaverage-aligned trace data from the filesystem or
@@ -654,7 +642,7 @@ def calc_fsaverage_traces(rater, sid, chirality, save_path,
     """
     h = chirality
     overwrite = io_options['overwrite']
-    traces_path = os.path.join(save_path, 'fsaverage_traces')
+    traces_path = data_path / 'fsaverage_traces'
     fsa_traces = None
     if overwrite is not True:
         # We try loading them and only calculate them if we aren't overwriting.
@@ -685,12 +673,12 @@ def calc_fsaverage_traces(rater, sid, chirality, save_path,
                 **io_options)
     return (fsa_traces,)
 @pimms.calc('fsnative_traces')
-def calc_fsnative_traces(region, rater, sid, chirality, save_path,
+def calc_fsnative_traces(region, rater, sid, chirality, data_path,
                          nested_data, io_options,
                          fsnative_isflipped=None,
                          npoints=500):
-    """Either loads the fsnative trace data that has been rigidly aligned from the
-    filesystem or retrieves it from the `nested_data` plan-data object.
+    """Either loads the fsnative trace data that has been rigidly aligned from
+    the filesystem or retrieves it from the `nested_data` plan-data object.
 
     Parameters
     ----------
@@ -703,7 +691,7 @@ def calc_fsnative_traces(region, rater, sid, chirality, save_path,
         The name of the rater; if not provided, this defaults to the mean rater.
     fsnative_isflipped : function or None, optional
         The function used to determine if the fsnative alignment needs to be
-        flipped.The alignment of the native contours into the fsnative contours
+        flipped. The alignment of the native contours into the fsnative contours
         works by aligning the principal components of the traces to the standard
         axes (i.e., the x and y axes). The algorithm will never reflect the data
         in performing this operation, but it can rotate the data 180 degrees. To
@@ -720,11 +708,10 @@ def calc_fsnative_traces(region, rater, sid, chirality, save_path,
         correspond to one of the drawn contours but will be subdivided into 500
         evenly spaced points (like `fsaverage_traces`) and aligned to its
         principal components.
-
     """
     h = chirality
     overwrite = io_options['overwrite']
-    traces_path = os.path.join(save_path, 'fsnative_traces')
+    traces_path = data_path / 'fsnative_traces'
     fsn_traces = None
     if overwrite is not True:
         # We try loading them and only calculate them if we aren't overwriting.
@@ -741,9 +728,10 @@ def calc_fsnative_traces(region, rater, sid, chirality, save_path,
         contours = contours_by_region[region]
         # We need to align all points to all points, not one trace at a time;
         # the ideal way to do this is to use only the drawn traces.
-        drawn_fsn_points = np.hstack(
-            [traces[k].curve.linspace(npoints)
-             for k in contours])
+        #drawn_fsn_points = np.hstack(
+        #    [traces[k].curve.linspace(npoints)
+        #     for k in contours])
+        drawn_fsn_points = traces['V3v'].curve.linspace(npoints)
         (rot, x0) = rigid_align_affine(drawn_fsn_points)
         # Now build up the fsnative_traces using the transformation.
         fsn_traces = {}
@@ -773,14 +761,14 @@ def calc_fsnative_traces(region, rater, sid, chirality, save_path,
                 **io_options)
     return (fsn_traces,)
 @pimms.calc('paths')
-def calc_paths(rater, sid, chirality, save_path,
+def calc_paths(rater, sid, chirality, data_path,
                nested_data, cortex, io_options, region):
     """Either loads or calculates (and saves) then returns the paths from the
     (loaded or calculated) path-traces.
     """
     h = chirality
     overwrite = io_options['overwrite']
-    paths_path = os.path.join(save_path, 'paths')
+    paths_path = data_path / 'paths'
     paths = None
     if overwrite is not True:
         # We try loading them and only calculate them if we aren't overwriting.
@@ -804,7 +792,7 @@ def calc_paths(rater, sid, chirality, save_path,
                 **io_options)
     return (paths,)
 @pimms.calc('labels', 'label_weights')
-def calc_labels(rater, sid, chirality, save_path,
+def calc_labels(rater, sid, chirality, data_path,
                 nested_data, cortex, io_options, region,
                 labelkey=labelkey):
     """Either loads or calculates (and saves) then returns the labels from the
@@ -812,7 +800,7 @@ def calc_labels(rater, sid, chirality, save_path,
     """
     h = chirality
     overwrite = io_options['overwrite']
-    labels_path = os.path.join(save_path, 'labels')
+    labels_path = data_path / 'labels'
     labels = None
     boundaries = procdata(region, 'boundaries')
     if overwrite is not True:
@@ -866,15 +854,15 @@ def calc_labels(rater, sid, chirality, save_path,
                 **io_options)
     return (lbl, ws)
 @pimms.calc('reports')
-def calc_reports(rater, sid, chirality, save_path,
+def calc_reports(rater, sid, chirality, data_path,
                  nested_data, cortex, io_options, region,
                  labelkey=labelkey):
-    """Either loads or calculates (and saves) then returns the surface area reports
-    from the (loaded or calculated) labels.
+    """Either loads or calculates (and saves) then returns the surface area
+    reports from the (loaded or calculated) labels.
     """
     h = chirality
     overwrite = io_options['overwrite']
-    reports_path = os.path.join(save_path, 'reports')
+    reports_path = data_path / 'reports'
     reports = None
     if overwrite is not True:
         # We try loading them and only calculate them if we aren't overwriting.
@@ -936,8 +924,7 @@ reports_plan = pimms.plan(
 # Means ########################################################################
 
 def export_means(sid, h,
-                 save_path='.',
-                 load_path=None,
+                 data_path='.',
                  raters=None,
                  npoints=500,
                  overwrite=True,
@@ -960,13 +947,9 @@ def export_means(sid, h,
         The HCP subject ID of the subject whose contours should be processed.
     h : 'lh' or 'rh'
         The hemisphere that should be processed.
-    save_path : directory name, optional
-        The directory to which this set of traces should be saved. Traces
-        themselves are saved into a directory equivalen to
-        `os.path.join(save_path, rater, str(sid))`. The default is `'.'`.
-    load_path : directory name, optional
-        The directory from which traces should be loaded; if not provided, then
-        defaults to the `save_path`.
+    data_path : str
+        The path containing the annotation data. This directory should be
+        organized as on the OSF repository for the project.
     raters : None or list of str, optional
         Either a list of raters that are to be included in the mean contours
         or `None` if all available raters should be included. The default is
@@ -995,8 +978,6 @@ def export_means(sid, h,
         of the raters whose contours were averaged in order to make the contour
         that was exported.
     """
-    if load_path is None:
-        load_path = save_path
     if isinstance(vc_contours, str):
         if vc_contours == 'ventral':
             vc_contours = vc_contours_ventral
@@ -1010,15 +991,13 @@ def export_means(sid, h,
                 vc_input_traces
         else:
             raise ValueError(f"unrecognized mean traces: {vc_input_traces}")
-    # This is where we will load and/or eventually save these contour files.
-    data_path = to_data_path(meanrater, sid, save_path=save_path)
+    contours_path = data_path / 'contours'
     # First, check if these data already exist (if we're not overwriting).
-    if not overwrite and os.path.isdir(data_path):
+    if not overwrite and data_path.is_dir():
         try:
-            # We use save_path here because we are checking for complete results
-            # that have already been calculated and saved.
             return load_contours(
-                meanrater, sid, h, save_path,
+                meanrater, sid, h,
+                load_path=contours_path,
                 vc_contours=vc_contours,
                 error_on_missing=True)
         except Exception:
@@ -1030,15 +1009,18 @@ def export_means(sid, h,
     for rater in raters:
         # Try loading the traces.
         try:
-            tr = load_traces(rater, sid, h, load_path,
-                             vc_traces=vc_input_traces)
+            tr = load_traces(
+                rater, sid, h,
+                load_path=(data_path / 'traces'),
+                vc_traces=vc_input_traces)
         except Exception as e:
-            print(e)
+            #print(e)
             tr = ()
-        if len(tr) == 0: continue
-        # Turn these into linspaced points.
-        trs[rater] = {k: v.copy(points=v.curve.linspace(npoints))
-                      for (k,v) in tr.items()}
+        if len(tr) > 0:
+            # Turn these into linspaced points.
+            trs[rater] = {
+                k: v.copy(points=v.curve.linspace(npoints))
+                for (k,v) in tr.items()}
     # Process these into a mean map of contours.
     meantrs = {}
     rcounts = {}
@@ -1053,11 +1035,13 @@ def export_means(sid, h,
         if h == 'lh':
             meantrs[k] = np.fliplr(meantrs[k])
     # Save the means; this gives us back a dict of filenames.
-    res = save_contours(meanrater, sid, h, meantrs, save_path,
-                        overwrite=overwrite,
-                        vc_contours=vc_contours,
-                        mkdir=mkdir,
-                        mkdir_mode=mkdir_mode)
+    res = save_contours(
+        meanrater, sid, h, meantrs,
+        save_path=(data_path / 'contours'),
+        overwrite=overwrite,
+        vc_contours=vc_contours,
+        mkdir=mkdir,
+        mkdir_mode=mkdir_mode)
     # Finally, process the results into a dict whose values are tuples
     # of the (filename, ratercount).
     res = {k: (v,rcounts[k]) for (k,v) in res.items()}
@@ -1068,8 +1052,7 @@ def export_means(sid, h,
 
 def export_images(rater, sid, h,
                   save_path='.',
-                  contours_load_path=None,
-                  labels_load_path=None,
+                  data_path=None,
                   vc_plan='ventral',
                   vc_contours='ventral',
                   overwrite=True,
@@ -1077,7 +1060,7 @@ def export_images(rater, sid, h,
                   mkdir_mode=0o775,
                   figsize=4,
                   dpi=1024):
-    """Exports an image of the labels and contours for a set of  visual areas.
+    """Exports an image of the labels and contours for a set of visual areas.
 
     Exports the requested images to disk. The images include the original
     contours and are colored according to the labels.
@@ -1112,10 +1095,9 @@ def export_images(rater, sid, h,
     """
     from ..interface import subject_data
     # If load path isn't provided, we guess it.
-    if contours_load_path is None:
-        contours_load_path = save_path
-    if labels_load_path is None:
-        labels_load_path = save_path
+    data_path = Path() if data_path is None else Path(data_path)
+    contours_load_path = data_path / 'contours'
+    labels_load_path = data_path / 'labels'
     if isinstance(vc_contours, str):
         tmp = vc_contours_by_name.get(vc_contours)
         if tmp is None:
@@ -1129,19 +1111,20 @@ def export_images(rater, sid, h,
     if not isinstance(figsize, Sequence):
         figsize = (figsize, figsize)
     # Make sure we need to generate the images in the first place.
-    path = os.path.join(save_path, rater)
-    filename = os.path.join(path, f'{h}_{sid}.png')
-    if not overwrite and os.path.isfile(filename):
+    path = save_path / rater
+    filename = path / f'{h}_{sid}.png'
+    if not overwrite and filename.is_file():
         return filename
     if mkdir and not os.path.isdir(path):
-        os.makedirs(path, mode=mkdir_mode, exist_ok=True)
+        path.mkdir(mode=mkdir_mode, exist_ok=True, parents=True)
     # Load the labels:
-    lbl = load_labels(rater, sid, h, labels_load_path)
+    lbl = load_labels(rater, sid, h, load_path=labels_load_path)
     # The easiest way to load the contours and the flatmap is to use the
     # vc_plan, so we do:
-    dat = vc_plan(rater=rater, sid=sid, hemisphere=h,
-                  save_path=contours_load_path,
-                  vc_contours=vc_contours)
+    dat = vc_plan(
+        rater=rater, sid=sid, hemisphere=h,
+        data_path=data_path,
+        vc_contours=vc_contours)
     contours = dat['contours']
     flatmap = dat['flatmap']
     # Now we can setup the figure.
@@ -1190,89 +1173,3 @@ def export_images(rater, sid, h,
     plt.savefig(filename)
     plt.close(fig)
     return filename
-
-
-# The below is archived code on processing the traces using the watershed
-# algorithm, which works sometimes but not consistently.
-def export_watershed_data(raters, sid, h,
-                          vc_plan='ventral',
-                          save_path='.',
-                          load_path=None,
-                          overwrite=True,
-                          mkdir=True,
-                          mkdir_mode=0o775,
-                          plan_args=None):
-    """Exports the labels for the visual areas hV4, VO1, and VO2.
-
-    Parameters
-    ----------
-    raters : str or list of str
-        The rater or raters to export the labels for.
-    sid : int
-        The HCP subject ID of the subject whose contours should be processed.
-    h : 'lh' or 'rh'
-        The hemisphere that should be processed.
-    vc_plan : pimms plan
-        The calculation plan that is to be used to produce the labels and
-        surface areas. These values must be stored in the `'labels'` and
-        `'surface_areas'` elements of the resulting plan dictionary. The plan
-        should resemble the `hcpannot.analysis.vc_plan_ventral` plan.
-    save_path : directory name, optional
-        The directory to which this set of labels should be saved. Labels
-        themselves are saved into a directory equivalen to
-        `os.path.join(save_path, rater)`. The default is `'.'`.
-    load_path : directory name, optional
-        The directory from which traces should be loaded; if not provided, then
-        defaults to the `save_path`.
-    plan_args : dict
-        The arguments that should be passed to the `vc_plan`. If `None` (the
-        default) then `{}` is used. These arguments are merged into a dictionary
-        containing the `rater`, `sid`, and `hemisphere` options, but arguments
-        in the `plan_args` dictionary overwrite these arguments if provided.
-    """
-    from os.path import isfile
-    # If load path isn't provided, we guess it.
-    if load_path is None:
-        load_path = save_path
-    # We'll be iterating through the raters, so make sure it's a sequence.
-    if isinstance(raters, str):
-        raters = [raters]
-    if plan_args is None:
-        plan_args = {}
-    if load_path is None:
-        load_path = save_path
-    if isinstance(vc_plan, str):
-        if vc_plan == 'ventral':
-            from .analysis import vc_plan_ventral as vc_plan
-        else:
-            raise ValueError(f"unrecognized vc_plan: {vc_plan}")
-    # Now iterate through the raters and hemispheres.
-    saved = []
-    for rater in raters:
-        # First of all, if there are already labels, don't rerun this unless
-        # the plan is to overwrite things.
-        path = os.path.join(save_path, rater)
-        if mkdir and not os.path.exists(path):
-            os.makedirs(path, mkdir_mode, exist_ok=True)
-        lbls_filename = os.path.join(path, f'{h}_{sid}.mgz')
-        sarea_filename = os.path.join(path, f'{h}_{sid}_sareas.tsv')
-        if not overwrite:
-            if isfile(lbls_filename) and isfile(sarea_filename):
-                saved.append(lbls_filename)
-                saved.append(sarea_filename)
-                continue
-        # We need to calculate the labels, so set up the plan:
-        args = dict(rater=rater, sid=sid, hemisphere=h, save_path=load_path)
-        args.update(**plan_args)
-        data = vc_plan(**args)
-        # Now we just extract and save the labels out to disk.
-        ny.save(lbls_filename, data['labels'])
-        # And finally, save the tsv file:
-        with open(sarea_filename, 'wt') as fl:
-            print("ROI\tsurface_area", file=fl)
-            for (k,v) in data['surface_areas'].items():
-                print(f"{k}\t{v}\n", file=fl)
-        # That's all!
-        saved.append(lbls_filename)
-        saved.append(sarea_filename)
-    return saved

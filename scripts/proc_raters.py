@@ -2,11 +2,12 @@
 ################################################################################
 
 import os, sys
+from pathlib import Path
+
 import pandas as pd
 
 import hcpannot
 import hcpannot.cmd as hcpa_cmd
-
 from hcpannot.mp import (makejobs, mprun)
 from hcpannot.proc import allproc
 
@@ -21,8 +22,7 @@ if raters is None:
 sids = hcpa_conf.sids
 hemis = hcpa_conf.hemis
 opts = hcpa_conf.opts
-save_path = hcpa_conf.opts['save_path']
-load_path = hcpa_conf.opts['load_path']
+data_path = Path(hcpa_conf.opts['data_path'])
 overwrite = hcpa_conf.opts['overwrite']
 if overwrite is False:
     overwrite = None
@@ -34,7 +34,7 @@ if region not in ('ventral', 'dorsal'):
 # Running the Jobs #############################################################
 
 # Make the job list.
-opts = dict(save_path=save_path, load_path=load_path, overwrite=overwrite)
+opts = dict(data_path=data_path, overwrite=overwrite)
 def call_allproc(sid, h):
     return allproc(region, rater=raters, sid=sid, hemisphere=h, **opts)
 def firstarg(a, b):
@@ -47,5 +47,12 @@ dfs = proc_traces_results = mprun(
     onfail=firstarg,
     onokay=firstarg)
 df = pd.concat(dfs)
-df.to_csv(os.path.join(save_path, f'proc_{region}.tsv'), sep='\t', index=False)
+
+logs_path = data_path / 'logs'
+if not logs_path.is_dir():
+    logs_path.mkdir(exist_ok=True, parents=True)
+df.to_csv(
+    logs_path / f'proc_{region}.tsv',
+    sep='\t',
+    index=False)
 

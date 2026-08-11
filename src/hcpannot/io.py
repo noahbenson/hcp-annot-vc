@@ -297,10 +297,12 @@ def load_contours(rater, sid, h, filenames,
         sid to produce an actual load directory. If `None`, then the current
         working directory is used. See also `to_data_path()`.
     missing_okay : boolean, optional
-        Whether it is okay for some or all of the files in `filenames` to be missing.
-        If `True` then errors are not raised when a missing file is encountered and
-        instead no entry in the resulting dictionary is included. If `False` (the
-        default), then an error is raised if a file is missing.
+        Whether it is okay for some or all of the files in `filenames` to be
+        missing.  If `True` then errors are not raised when a missing file is
+        encountered and instead no entry in the resulting dictionary is
+        included. If `False` (the default), then an error is raised if a file is
+        missing.
+
     """
     return _load_annotdata(
         'contours', _load_contour,

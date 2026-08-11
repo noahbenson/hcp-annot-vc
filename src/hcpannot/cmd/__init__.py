@@ -157,19 +157,12 @@ class ConfigInOut(Config):
     def build_parser(cls, parser):
         Config.build_parser(parser)
         parser.add_argument(
-            'load_path',
-            nargs='?',
-            default=None,
-            help='The path from which to read the inputs; . by default.')
-        parser.add_argument(
-            'save_path',
-            nargs='?',
+            'data_path',
             type=str,
             default='.',
-            help='The path to which to save the output; load_path by default.')
+            help='The path to load the input from and save the output to.')
     def parsed_args(self):
         if self._parsed_args is None:
             args = Config.parsed_args(self)
-            self.opts['save_path'] = args.save_path
-            self.opts['load_path'] = args.load_path or args.save_path
+            self.opts['data_path'] = args.data_path
         return self._parsed_args

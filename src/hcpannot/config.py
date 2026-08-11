@@ -109,8 +109,8 @@ ventral_raters = [
     'R4',
     'R5']
 dorsal_raters = [
-    'R6',
     'R1',
+    'R6',
     'R7',
     'R8',
     'R9']
@@ -159,8 +159,8 @@ traces_dorsal = {
 
 # FSNative Alignment References ------------------------------------------------
 def fsnative_isflipped_ventral(traces):
-    (x,y) = traces['hV4_outer'].points
-    return y[0] < 0
+    (x,y) = traces['hV4_VO1'].points
+    return y[-1] > 0
 def fsnative_isflipped_dorsal(traces):
     (x,y) = traces['LO1_outer'].points
     return y[0] > 0
@@ -379,18 +379,18 @@ def procdata(region, step):
 ################################################################################
 # Input/Output Configuration
 
-def to_data_path(rater, sid, save_path,
+def to_data_path(rater, sid, base_path=None, *,
                  mkdir=False, mkdir_mode=0o775,
                  expanduser=True, expandvars=True):
-    """Returns a save path for the given rater, subject ID, and save path.
+    """Returns a data path for the given rater, subject ID, and save path.
 
-    `to_data_path(rater, sid, save_path)` appends directories for the rater and
-    subject id (`sid`) to the given `save_path` and returns it. This is roughly
-    equivalent to `os.path.join(save_path, rater, str(sid))` but it returns a
+    `to_data_path(rater, sid, base_path)` appends directories for the rater and
+    subject id (`sid`) to the given `base_path` and returns it. This is roughly
+    equivalent to `os.path.join(base_path, rater, str(sid))` but it returns a
     pathlib Path object instead of a string.
 
     If either of `rater` or `sid` is `None` then that directory is excluded from
-    the path. If `save_path` is `None`, then the current working directory is
+    the path. If `base_path` is `None`, then the current working directory is
     used in its place.
 
     In addition to joining the path, `to_data_path` expands variables and user
@@ -408,36 +408,36 @@ def to_data_path(rater, sid, save_path,
     if rater is not None and not isinstance(rater, str):
         raise ValueError(
             f"to_data_path argument rater ({rater}) must be a str or None")
-    if not (save_path is None or
-            isinstance(save_path, str) or
-            isinstance(save_path, Path)):
-        t = type(save_path)
+    if not (base_path is None or
+            isinstance(base_path, str) or
+            isinstance(base_path, Path)):
+        t = type(base_path)
         raise ValueError(
-            f"to_data_path argument save_path has invalid type: {t}")
+            f"to_data_path argument base_path has invalid type: {t}")
     # See if we are missing pieces.
     if sid is None:
         if rater is None:
-            if save_path is None:
+            if base_path is None:
                 # Nothing provided: just return the current directory.
                 path = Path()
             else:
-                path = Path(save_path)
+                path = Path(base_path)
         else:
-            if save_path is None:
+            if base_path is None:
                 path = Path(rater)
             else:
-                path = Path(save_path) / rater
+                path = Path(base_path) / rater
     else:
         if rater is None:
-            if save_path is None:
+            if base_path is None:
                 path = Path(sid)
             else:
-                path = Path(save_path) / sid
+                path = Path(base_path) / sid
         else:
-            if save_path is None:
+            if base_path is None:
                 path = Path(rater) / sid
             else:
-                path = Path(save_path) / rater / sid
+                path = Path(base_path) / rater / sid
     if expandvars:
         path = Path(os.path.expandvars(path))
     if expanduser:
