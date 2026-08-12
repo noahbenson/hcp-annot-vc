@@ -11,7 +11,6 @@
 FROM nben/hcp-annot-vc:20230329
 
 USER $NB_USER
-
 # For the analysis version, we don't want the settings we installed previously;
 # they are mostly for making Jupyter look like an app instead of a notebook.
 RUN rm -rf /home/$NB_USER/.jupyter
@@ -21,25 +20,33 @@ RUN rm -rf "$HOME"/hcpannot
 # Also delete the open_me.ipynb notebook.
 RUN rm -rf "$HOME"/open_me.ipynb
 
-# We need to install pytorch.
-RUN pip install torch
-
-# Put the hcpannot library inside of this image and install it.
-RUN git clone -b analysis https://github.com/noahbenson/hcp-annot-vc repo \
- && cd repo \
- && pip install -e .
-
-# We also want to install lme4 for use with our data.
+USER root
+# Make a directory for the repos.
+RUN mkdir -p /repo && chown $NB_USER /repo
+RUN mkdir -p /data && chown $NB_USER /data
+# We also want to install R and lme4 for use with our data.
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends software-properties-common
+RUN wget -q -O /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc \
+         https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc \
+ && add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/" \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends r-base r-base-dev
 RUN R -e 'install.packages("lme4", repos="http://cran.us.r-project.org")'
 
-# We also want to check out the current state of the data repo and link it
-# to the appropriate rater IDs in the data directory.
-USER root
-RUN mkdir -p /data /data_branch \
-    && chown $NB_USER /data \
-    && chown $NB_USER /data_branch
-
 USER $NB_USER
-RUN cd /data_branch \
+# We need to install pytorch.
+RUN pip install torch
+# And we need to put the the hcpannot library inside of this image--both the
+# data and the analysis library.
+RUN cd /repo \
+ && mkdir data \
+ && cd data \
  && git clone -b data https://github.com/noahbenson/hcp-annot-vc .
+RUN cd /repo \
+ && mkdir analysis \
+ && cd analysis \
+ && git clone -b analysis https://github.com/noahbenson/hcp-annot-vc . \
+ && pip install -e .
 

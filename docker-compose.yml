@@ -6,6 +6,7 @@ services:
          - "8888:8888"
       volumes:
          - ${PWD}/.git:/home/jovyan/.extgit
+         - ${PWD}:/home/jovyan/ext
          - ${PWD}/docker/local_cache:/data
       environment:
          - DOCKER_STACKS_JUPYTER_CMD=lab
