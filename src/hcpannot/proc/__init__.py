@@ -143,9 +143,9 @@ def allproc(contours_plan, **kw):
     from time import time
     from pandas import DataFrame
     from numbers import Integral
-    raters = kw.pop('rater')
-    sids = kw.pop('sid')
-    hs = kw.pop('hemisphere')
+    raters = kw.pop('rater', None)
+    sids = kw.pop('sid', None)
+    hs = kw.pop('hemisphere', None)
     from ..config import raters_by_region, subject_list as allsids
     allraters = raters_by_region[contours_plan]
     allhems = ('lh', 'rh')
