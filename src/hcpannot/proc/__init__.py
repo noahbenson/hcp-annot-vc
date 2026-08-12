@@ -163,7 +163,7 @@ def allproc(contours_plan, **kw):
     if isinstance(hs, str):
         hs = [hs]
     elif hs is None or 'all' == hs or 'lr' == hs:
-        lh = allhems
+        hs = allhems
     # We process by subject and hemisphere first because it is smarter in terms
     # of how/when we do disk i/o.
     res = dict(rater=[], sid=[], hemisphere=[], dt=[], error=[])
