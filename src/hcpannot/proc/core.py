@@ -793,7 +793,7 @@ def calc_paths(rater, sid, chirality, data_path,
     return (paths,)
 @pimms.calc('labels', 'label_weights')
 def calc_labels(rater, sid, chirality, data_path,
-                nested_data, cortex, io_options, region,
+                nested_data, io_options, region,
                 labelkey=labelkey):
     """Either loads or calculates (and saves) then returns the labels from the
     (loaded or calculated) paths.
@@ -855,7 +855,7 @@ def calc_labels(rater, sid, chirality, data_path,
     return (lbl, ws)
 @pimms.calc('reports')
 def calc_reports(rater, sid, chirality, data_path,
-                 nested_data, cortex, io_options, region,
+                 nested_data, io_options, region,
                  labelkey=labelkey):
     """Either loads or calculates (and saves) then returns the surface area
     reports from the (loaded or calculated) labels.

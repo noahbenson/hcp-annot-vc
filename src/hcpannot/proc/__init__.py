@@ -146,12 +146,24 @@ def allproc(contours_plan, **kw):
     raters = kw.pop('rater')
     sids = kw.pop('sid')
     hs = kw.pop('hemisphere')
+    from ..config import raters_by_region, subject_list as allsids
+    allraters = raters_by_region[contours_plan]
+    allhems = ('lh', 'rh')
     if isinstance(raters, str):
-        raters = [raters]
+        if raters == 'all':
+            raters = allraters
+        else:
+            raters = [raters]
+    elif raters is None:
+        raters = allraters
     if isinstance(sids, Integral):
         sids = [sids]
+    elif sids is None or 'all' == sids:
+        sids = allsids
     if isinstance(hs, str):
         hs = [hs]
+    elif hs is None or 'all' == hs or 'lr' == hs:
+        lh = allhems
     # We process by subject and hemisphere first because it is smarter in terms
     # of how/when we do disk i/o.
     res = dict(rater=[], sid=[], hemisphere=[], dt=[], error=[])
